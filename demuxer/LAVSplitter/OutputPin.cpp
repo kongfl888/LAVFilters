@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -30,10 +30,10 @@
 
 CLAVOutputPin::CLAVOutputPin(std::deque<CMediaType>& mts, LPCWSTR pName, CBaseFilter *pFilter, CCritSec *pLock, HRESULT *phr, CBaseDemuxer::StreamType pinType, const char* container)
   : CBaseOutputPin(NAME("lavf dshow output pin"), pFilter, pLock, phr, pName)
+  , m_mts(mts)
   , m_containerFormat(container)
   , m_pinType(pinType)
   , m_Parser(this, container)
-  , m_mts(mts)
 {
   SetQueueSizes();
 }
@@ -164,7 +164,7 @@ HRESULT CLAVOutputPin::DecideBufferSize(IMemAllocator* pAlloc, ALLOCATOR_PROPERT
 
   HRESULT hr = S_OK;
 
-  pProperties->cBuffers = max(pProperties->cBuffers, (m_bPacketAllocator ? 10 : m_nBuffers));
+  pProperties->cBuffers = max(pProperties->cBuffers, (m_bPacketAllocator ? 20 : m_nBuffers));
   pProperties->cbBuffer = max(max(m_mt.lSampleSize, 256000), (ULONG)pProperties->cbBuffer);
 
   // Vorbis requires at least 2 buffers

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -41,6 +41,7 @@ private:
   HRESULT ParseMOVText(Packet *pPacket);
   HRESULT ParseAAC(Packet *pPacket);
   HRESULT ParseSRT(Packet *pPacket);
+  HRESULT ParsePlanarPCM(Packet *pPacket);
 
   HRESULT Queue(Packet *pPacket) const;
 

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -246,6 +246,7 @@ static const FFMPEG_SUBTYPE_MAP lavc_video_codecs[] = {
   { &MEDIASUBTYPE_DiracVideo, AV_CODEC_ID_DIRAC },
   { &MEDIASUBTYPE_DRAC, AV_CODEC_ID_DIRAC },
   { &MEDIASUBTYPE_AVdn, AV_CODEC_ID_DNXHD },
+  { &MEDIASUBTYPE_AVdh, AV_CODEC_ID_DNXHD },
   { &MEDIASUBTYPE_CRAM, AV_CODEC_ID_MSVIDEO1 },
   { &MEDIASUBTYPE_MSVC, AV_CODEC_ID_MSVIDEO1 },
   { &MEDIASUBTYPE_WHAM, AV_CODEC_ID_MSVIDEO1 },
@@ -274,6 +275,7 @@ static const FFMPEG_SUBTYPE_MAP lavc_video_codecs[] = {
   { &MEDIASUBTYPE_SMK2, AV_CODEC_ID_SMACKVIDEO },
   { &MEDIASUBTYPE_SMK4, AV_CODEC_ID_SMACKVIDEO },
   { &MEDIASUBTYPE_THPV, AV_CODEC_ID_THP },
+  { &MEDIASUBTYPE_ROQV, AV_CODEC_ID_ROQ },
 
   // Image Formats
   { &MEDIASUBTYPE_PNG,  AV_CODEC_ID_PNG   },
@@ -507,6 +509,7 @@ const AMOVIESETUP_MEDIATYPE CLAVVideo::sudPinTypesIn[] = {
   { &MEDIATYPE_Video, &MEDIASUBTYPE_DiracVideo },
   { &MEDIATYPE_Video, &MEDIASUBTYPE_DRAC },
   { &MEDIATYPE_Video, &MEDIASUBTYPE_AVdn },
+  { &MEDIATYPE_Video, &MEDIASUBTYPE_AVdh },
   { &MEDIATYPE_Video, &MEDIASUBTYPE_CRAM },
   { &MEDIATYPE_Video, &MEDIASUBTYPE_MSVC },
   { &MEDIATYPE_Video, &MEDIASUBTYPE_WHAM },
@@ -535,6 +538,7 @@ const AMOVIESETUP_MEDIATYPE CLAVVideo::sudPinTypesIn[] = {
   { &MEDIATYPE_Video, &MEDIASUBTYPE_SMK2 },
   { &MEDIATYPE_Video, &MEDIASUBTYPE_SMK4 },
   { &MEDIATYPE_Video, &MEDIASUBTYPE_THPV },
+  { &MEDIATYPE_Video, &MEDIASUBTYPE_ROQV },
 
   // Image Formats
   { &MEDIATYPE_Video, &MEDIASUBTYPE_PNG  },
@@ -697,8 +701,17 @@ void fillDXVAExtFormat(DXVA2_ExtendedFormat &fmt, int range, int primaries, int 
   case AVCOL_PRI_SMPTE240M:
     fmt.VideoPrimaries = DXVA2_VideoPrimaries_SMPTE240M;
     break;
+  // Values from newer Windows SDK (MediaFoundation)
   case AVCOL_PRI_BT2020:
     fmt.VideoPrimaries = (DXVA2_VideoPrimaries)9;
+    break;
+  case AVCOL_PRI_SMPTE428:
+    // XYZ
+    fmt.VideoPrimaries = (DXVA2_VideoPrimaries)10;
+    break;
+  case AVCOL_PRI_SMPTE431:
+    // DCI-P3
+    fmt.VideoPrimaries = (DXVA2_VideoPrimaries)11;
     break;
   }
 
@@ -714,11 +727,12 @@ void fillDXVAExtFormat(DXVA2_ExtendedFormat &fmt, int range, int primaries, int 
   case AVCOL_SPC_SMPTE240M:
     fmt.VideoTransferMatrix = DXVA2_VideoTransferMatrix_SMPTE240M;
     break;
-  // Custom values, not official standard, but understood by madVR
+  // Values from newer Windows SDK (MediaFoundation)
   case AVCOL_SPC_BT2020_CL:
   case AVCOL_SPC_BT2020_NCL:
     fmt.VideoTransferMatrix = (DXVA2_VideoTransferMatrix)4;
     break;
+  // Custom values, not official standard, but understood by madVR
   case AVCOL_SPC_FCC:
     fmt.VideoTransferMatrix = (DXVA2_VideoTransferMatrix)6;
     break;
@@ -750,9 +764,9 @@ void fillDXVAExtFormat(DXVA2_ExtendedFormat &fmt, int range, int primaries, int 
   case AVCOL_TRC_LOG_SQRT:
     fmt.VideoTransferFunction = MFVideoTransFunc_Log_316;
     break;
-  // Custom values, not official standard, but understood by madVR
+  // Values from newer Windows SDK (MediaFoundation)
   case AVCOL_TRC_SMPTEST2084:
-    fmt.VideoTransferFunction = 16;
+    fmt.VideoTransferFunction = 15;
     break;
   }
 

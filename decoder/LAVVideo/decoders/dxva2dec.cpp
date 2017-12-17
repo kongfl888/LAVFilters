@@ -21,6 +21,7 @@
 
 #include "stdafx.h"
 #include "dxva2dec.h"
+#include "dxva2/dxva_common.h"
 #include "dxva2/DXVA2SurfaceAllocator.h"
 #include "moreuuids.h"
 #include "Media.h"
@@ -79,104 +80,6 @@ HRESULT VerifyD3D9Device(DWORD & dwIndex, DWORD dwDeviceId)
 done:
   SafeRelease(&pD3D);
   return hr;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Codec Maps
-////////////////////////////////////////////////////////////////////////////////
-
-/*
-DXVA2 Codec Mappings, as defined by VLC
-*/
-typedef struct {
-  const char   *name;
-  const GUID   *guid;
-  int          codec;
-} dxva2_mode_t;
-/* XXX Prefered modes must come first */
-static const dxva2_mode_t dxva2_modes[] = {
-  /* MPEG-1/2 */
-  { "MPEG-2 variable-length decoder",                                               &DXVA2_ModeMPEG2_VLD,                   AV_CODEC_ID_MPEG2VIDEO },
-  { "MPEG-2 & MPEG-1 variable-length decoder",                                      &DXVA2_ModeMPEG2and1_VLD,               AV_CODEC_ID_MPEG2VIDEO },
-  { "MPEG-2 motion compensation",                                                   &DXVA2_ModeMPEG2_MoComp,                0 },
-  { "MPEG-2 inverse discrete cosine transform",                                     &DXVA2_ModeMPEG2_IDCT,                  0 },
-
-  { "MPEG-1 variable-length decoder",                                               &DXVA2_ModeMPEG1_VLD,                   0 },
-
-  /* H.264 */
-  { "H.264 variable-length decoder, film grain technology",                         &DXVA2_ModeH264_F,                      AV_CODEC_ID_H264 },
-  { "H.264 variable-length decoder, no film grain technology",                      &DXVA2_ModeH264_E,                      AV_CODEC_ID_H264 },
-  { "H.264 variable-length decoder, no film grain technology, FMO/ASO",             &DXVA_ModeH264_VLD_WithFMOASO_NoFGT,    AV_CODEC_ID_H264 },
-  { "H.264 variable-length decoder, no film grain technology, Flash",               &DXVA_ModeH264_VLD_NoFGT_Flash,         AV_CODEC_ID_H264 },
-
-  { "H.264 inverse discrete cosine transform, film grain technology",               &DXVA2_ModeH264_D,                      0 },
-  { "H.264 inverse discrete cosine transform, no film grain technology",            &DXVA2_ModeH264_C,                      0 },
-
-  { "H.264 motion compensation, film grain technology",                             &DXVA2_ModeH264_B,                      0 },
-  { "H.264 motion compensation, no film grain technology",                          &DXVA2_ModeH264_A,                      0 },
-
-  /* WMV */
-  { "Windows Media Video 8 motion compensation",                                    &DXVA2_ModeWMV8_B,                      0 },
-  { "Windows Media Video 8 post processing",                                        &DXVA2_ModeWMV8_A,                      0 },
-
-  { "Windows Media Video 9 IDCT",                                                   &DXVA2_ModeWMV9_C,                      0 },
-  { "Windows Media Video 9 motion compensation",                                    &DXVA2_ModeWMV9_B,                      0 },
-  { "Windows Media Video 9 post processing",                                        &DXVA2_ModeWMV9_A,                      0 },
-
-  /* VC-1 */
-  { "VC-1 variable-length decoder (2010)",                                          &DXVA2_ModeVC1_D2010,                   AV_CODEC_ID_VC1 },
-  { "VC-1 variable-length decoder (2010)",                                          &DXVA2_ModeVC1_D2010,                   AV_CODEC_ID_WMV3 },
-  { "VC-1 variable-length decoder",                                                 &DXVA2_ModeVC1_D,                       AV_CODEC_ID_VC1 },
-  { "VC-1 variable-length decoder",                                                 &DXVA2_ModeVC1_D,                       AV_CODEC_ID_WMV3 },
-
-  { "VC-1 inverse discrete cosine transform",                                       &DXVA2_ModeVC1_C,                       0 },
-  { "VC-1 motion compensation",                                                     &DXVA2_ModeVC1_B,                       0 },
-  { "VC-1 post processing",                                                         &DXVA2_ModeVC1_A,                       0 },
-
-  /* MPEG4-ASP */
-  { "MPEG-4 Part 2 nVidia bitstream decoder",                                       &DXVA_nVidia_MPEG4_ASP,                 0 },
-  { "MPEG-4 Part 2 variable-length decoder, Simple Profile",                        &DXVA_ModeMPEG4pt2_VLD_Simple,          0 },
-  { "MPEG-4 Part 2 variable-length decoder, Simple&Advanced Profile, no GMC",       &DXVA_ModeMPEG4pt2_VLD_AdvSimple_NoGMC, 0 },
-  { "MPEG-4 Part 2 variable-length decoder, Simple&Advanced Profile, GMC",          &DXVA_ModeMPEG4pt2_VLD_AdvSimple_GMC,   0 },
-  { "MPEG-4 Part 2 variable-length decoder, Simple&Advanced Profile, Avivo",        &DXVA_ModeMPEG4pt2_VLD_AdvSimple_Avivo, 0 },
-
-  /* H.264 MVC */
-  { "H.264 MVC variable-length decoder, stereo, progressive",                       &DXVA_ModeH264_VLD_Stereo_Progressive_NoFGT, 0 },
-  { "H.264 MVC variable-length decoder, stereo",                                    &DXVA_ModeH264_VLD_Stereo_NoFGT,             0 },
-  { "H.264 MVC variable-length decoder, multiview",                                 &DXVA_ModeH264_VLD_Multiview_NoFGT,          0 },
-
-  /* H.264 SVC */
-  { "H.264 SVC variable-length decoder, baseline",                                  &DXVA_ModeH264_VLD_SVC_Scalable_Baseline,                    0 },
-  { "H.264 SVC variable-length decoder, constrained baseline",                      &DXVA_ModeH264_VLD_SVC_Restricted_Scalable_Baseline,         0 },
-  { "H.264 SVC variable-length decoder, high",                                      &DXVA_ModeH264_VLD_SVC_Scalable_High,                        0 },
-  { "H.264 SVC variable-length decoder, constrained high progressive",              &DXVA_ModeH264_VLD_SVC_Restricted_Scalable_High_Progressive, 0 },
-
-  /* HEVC / H.265 */
-  { "HEVC / H.265 variable-length decoder, main",                                   &DXVA_ModeHEVC_VLD_Main,                AV_CODEC_ID_HEVC },
-  { "HEVC / H.265 variable-length decoder, main10",                                 &DXVA_ModeHEVC_VLD_Main10,              AV_CODEC_ID_HEVC },
-
-  /* VP8/9 */
-  { "VP9 variable-length decoder, profile 0",                                       &DXVA_ModeVP9_VLD_Profile0,             AV_CODEC_ID_VP9 },
-  { "VP9 variable-length decoder, 10bit, profile 2",                                &DXVA_ModeVP9_VLD_10bit_Profile2,       0 },
-  { "VP8 variable-length decoder",                                                  &DXVA_ModeVP8_VLD,                      0 },
-
-  /* Intel specific modes (only useful on older GPUs) */
-  { "H.264 variable-length decoder, no film grain technology (Intel ClearVideo)",   &DXVADDI_Intel_ModeH264_E,              AV_CODEC_ID_H264 },
-  { "H.264 inverse discrete cosine transform, no film grain technology (Intel)",    &DXVADDI_Intel_ModeH264_C,              0 },
-  { "H.264 motion compensation, no film grain technology (Intel)",                  &DXVADDI_Intel_ModeH264_A,              0 },
-  { "VC-1 variable-length decoder 2 (Intel)",                                       &DXVA_Intel_VC1_ClearVideo_2,           0 },
-  { "VC-1 variable-length decoder (Intel)",                                         &DXVA_Intel_VC1_ClearVideo,             0 },
-
-  { nullptr, nullptr, 0 }
-};
-
-static const dxva2_mode_t *DXVA2FindMode(const GUID *guid)
-{
-  for (unsigned i = 0; dxva2_modes[i].name; i++) {
-    if (IsEqualGUID(*dxva2_modes[i].guid, *guid))
-      return &dxva2_modes[i];
-  }
-  return nullptr;
 }
 
 // List of PCI Device ID of ATI cards with UVD or UVD+ decoding block.
@@ -261,7 +164,6 @@ CDecDXVA2::CDecDXVA2(void)
   : CDecAvcodec()
 {
   ZeroMemory(&dx, sizeof(dx));
-  ZeroMemory(&m_DXVAExtendedFormat, sizeof(m_DXVAExtendedFormat));
   ZeroMemory(&m_pSurfaces, sizeof(m_pSurfaces));
   ZeroMemory(&m_pRawSurface, sizeof(m_pRawSurface));
   ZeroMemory(&m_FrameQueue, sizeof(m_FrameQueue));
@@ -309,6 +211,11 @@ STDMETHODIMP CDecDXVA2::FreeD3DResources()
   SafeRelease(&m_pD3DDevMngr);
   SafeRelease(&m_pD3DDev);
   SafeRelease(&m_pD3D);
+
+  if (dx.d3dlib) {
+    FreeLibrary(dx.d3dlib);
+    dx.d3dlib = nullptr;
+  }
 
   if (dx.dxva2lib) {
     FreeLibrary(dx.dxva2lib);
@@ -372,8 +279,8 @@ STDMETHODIMP CDecDXVA2::PostConnect(IPin *pPin)
   if (m_bNative) {
     if (!m_pDecoder) {
       // If this is the first call, re-align surfaces, as the requirements may only be known now
-      m_dwSurfaceWidth = GetAlignedDimension(m_pAVCtx->coded_width);
-      m_dwSurfaceHeight = GetAlignedDimension(m_pAVCtx->coded_height);
+      m_dwSurfaceWidth = dxva_align_dimensions(m_pAVCtx->codec_id, m_pAVCtx->coded_width);
+      m_dwSurfaceHeight = dxva_align_dimensions(m_pAVCtx->codec_id, m_pAVCtx->coded_height);
     }
 
     CMediaType mt = m_pCallback->GetOutputMediaType();
@@ -436,6 +343,15 @@ done:
 
 STDMETHODIMP CDecDXVA2::LoadDXVA2Functions()
 {
+  // Load D3D9 library
+  dx.d3dlib = LoadLibrary(L"d3d9.dll");
+  if (dx.d3dlib == nullptr) {
+    DbgLog((LOG_TRACE, 10, L"-> Loading d3d9.dll failed"));
+    return E_FAIL;
+  }
+
+  dx.direct3DCreate9Ex = (pDirect3DCreate9Ex *)GetProcAddress(dx.d3dlib, "Direct3DCreate9Ex");
+
   // Load DXVA2 library
   dx.dxva2lib = LoadLibrary(L"dxva2.dll");
   if (dx.dxva2lib == nullptr) {
@@ -516,7 +432,7 @@ done:
   return hr;
 }
 
-HRESULT CDecDXVA2::FindVideoServiceConversion(AVCodecID codec, bool bHighBitdepth, GUID *input, D3DFORMAT *output)
+HRESULT CDecDXVA2::FindVideoServiceConversion(AVCodecID codec, int profile, GUID *input, D3DFORMAT *output)
 {
   HRESULT hr = S_OK;
 
@@ -533,7 +449,7 @@ HRESULT CDecDXVA2::FindVideoServiceConversion(AVCodecID codec, bool bHighBitdept
   DbgLog((LOG_TRACE, 10, L"-> Enumerating supported DXVA2 modes (count: %d)", count));
   for(unsigned i = 0; i < count; i++) {
     const GUID *g = &input_list[i];
-    const dxva2_mode_t *mode = DXVA2FindMode(g);
+    const dxva_mode_t *mode = get_dxva_mode_from_guid(g);
     if (mode) {
       DbgLog((LOG_TRACE, 10, L"  -> %S", mode->name));
     } else {
@@ -542,19 +458,14 @@ HRESULT CDecDXVA2::FindVideoServiceConversion(AVCodecID codec, bool bHighBitdept
   }
 
   /* Iterate over our priority list */
-  for (unsigned i = 0; dxva2_modes[i].name; i++) {
-    const dxva2_mode_t *mode = &dxva2_modes[i];
-     if (!mode->codec || mode->codec != codec)
+  for (unsigned i = 0; dxva_modes[i].name; i++) {
+    const dxva_mode_t *mode = &dxva_modes[i];
+    if (!check_dxva_mode_compatibility(mode, codec, profile))
        continue;
 
      BOOL supported = FALSE;
      for (const GUID *g = &input_list[0]; !supported && g < &input_list[count]; g++) {
        supported = IsEqualGUID(*mode->guid, *g);
-
-       if (codec == AV_CODEC_ID_HEVC && bHighBitdepth && !IsEqualGUID(*g, DXVA_ModeHEVC_VLD_Main10))
-         supported = false;
-       else if (codec == AV_CODEC_ID_HEVC && !bHighBitdepth && IsEqualGUID(*g, DXVA_ModeHEVC_VLD_Main10))
-         supported = false;
      }
      if (!supported)
        continue;
@@ -574,10 +485,10 @@ HRESULT CDecDXVA2::FindVideoServiceConversion(AVCodecID codec, bool bHighBitdept
      for (unsigned j = 0; j < out_count; j++) {
        const D3DFORMAT f = out_list[j];
        DbgLog((LOG_TRACE, 10, L"  -> %d is supported (%4.4S)", f, (const char *)&f));
-       if (bHighBitdepth && (f == FOURCC_P010 || f == FOURCC_P016)) {
+       if (mode->high_bit_depth && (f == FOURCC_P010 || f == FOURCC_P016)) {
          matchingFormat = TRUE;
          format = f;
-       } else if (!bHighBitdepth && f == FOURCC_NV12) {
+       } else if (!mode->high_bit_depth && f == FOURCC_NV12) {
          matchingFormat = TRUE;
          format = f;
        }
@@ -601,45 +512,14 @@ done:
   return E_FAIL;
 }
 
-/**
- * This function is only called in non-native mode
- * Its responsibility is to initialize D3D, create a device and a device manager
- * and call SetD3DDeviceManager with it.
- */
-HRESULT CDecDXVA2::InitD3D()
+HRESULT CDecDXVA2::InitD3DAdapterIdentifier(UINT lAdapter)
 {
-  HRESULT hr = S_OK;
+  ASSERT(m_pD3D);
 
-  if (FAILED(hr = LoadDXVA2Functions())) {
-    DbgLog((LOG_ERROR, 10, L"-> Failed to load DXVA2 DLL functions"));
-    return E_FAIL;
-  }
-
-  m_pD3D = Direct3DCreate9(D3D_SDK_VERSION);
-  if (!m_pD3D) {
-    DbgLog((LOG_ERROR, 10, L"-> Failed to acquire IDirect3D9"));
-    return E_FAIL;
-  }
-
-  UINT lAdapter = m_pSettings->GetHWAccelDeviceIndex(HWAccel_DXVA2CopyBack, nullptr);
-  if (lAdapter == LAVHWACCEL_DEVICE_DEFAULT)
-    lAdapter = D3DADAPTER_DEFAULT;
-
-  DWORD dwDeviceIndex = m_pCallback->GetGPUDeviceIndex();
-  if (dwDeviceIndex != DWORD_MAX) {
-    lAdapter = (UINT)dwDeviceIndex;
-  }
-
-retry_default:
-  D3DADAPTER_IDENTIFIER9 d3dai = {0};
-  hr = m_pD3D->GetAdapterIdentifier(lAdapter, 0, &d3dai);
+  D3DADAPTER_IDENTIFIER9 d3dai = { 0 };
+  HRESULT hr = m_pD3D->GetAdapterIdentifier(lAdapter, 0, &d3dai);
   if (FAILED(hr)) {
-    // retry if the adapter is invalid
-    if (lAdapter != D3DADAPTER_DEFAULT) {
-      lAdapter = D3DADAPTER_DEFAULT;
-      goto retry_default;
-    }
-    DbgLog((LOG_TRACE, 10, L"-> Querying of adapter identifier failed with hr: %X", hr));
+    DbgLog((LOG_TRACE, 10, L"-> Querying of adapter identifier %d failed with hr: %X", lAdapter, hr));
     return E_FAIL;
   }
 
@@ -655,10 +535,40 @@ retry_default:
   m_dwVendorId = d3dai.VendorId;
   m_dwDeviceId = d3dai.DeviceId;
 
-  D3DPRESENT_PARAMETERS d3dpp;
-  D3DDISPLAYMODE d3ddm;
+  return S_OK;
+}
 
-  ZeroMemory(&d3dpp, sizeof(d3dpp));
+/**
+ * This function is only called in non-native mode
+ * Its responsibility is to initialize D3D, create a device and a device manager
+ * and call SetD3DDeviceManager with it.
+ */
+HRESULT CDecDXVA2::InitD3D(UINT lAdapter)
+{
+  HRESULT hr = S_OK;
+
+  m_pD3D = Direct3DCreate9(D3D_SDK_VERSION);
+  if (!m_pD3D) {
+    DbgLog((LOG_ERROR, 10, L"-> Failed to acquire IDirect3D9"));
+    return E_FAIL;
+  }
+
+  // populate the adapter identifier values
+  hr = InitD3DAdapterIdentifier(lAdapter);
+
+  // if the requested adapter failed, try again
+  if (FAILED(hr) && lAdapter != D3DADAPTER_DEFAULT) {
+    lAdapter = D3DADAPTER_DEFAULT;
+    hr = InitD3DAdapterIdentifier(lAdapter);
+  }
+
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  D3DPRESENT_PARAMETERS d3dpp = { 0 };
+  D3DDISPLAYMODE d3ddm = { 0 };
+
   m_pD3D->GetAdapterDisplayMode(lAdapter, &d3ddm);
 
   d3dpp.Windowed               = TRUE;
@@ -675,17 +585,62 @@ retry_default:
     return E_FAIL;
   }
 
-  hr = CreateD3DDeviceManager(m_pD3DDev, &m_pD3DResetToken, &m_pD3DDevMngr);
-  if (FAILED(hr)) {
-    DbgLog((LOG_TRACE, 10, L"-> Creation of Device manager failed with hr: %X", hr));
-    return E_FAIL;
+  return S_OK;
+}
+
+HRESULT CDecDXVA2::InitD3DEx(UINT lAdapter)
+{
+  HRESULT hr = S_OK;
+
+  if (dx.direct3DCreate9Ex == nullptr) {
+    DbgLog((LOG_ERROR, 10, L"-> Direct3DCreate9Ex not available"));
+    return E_NOINTERFACE;
   }
 
-  hr = SetD3DDeviceManager(m_pD3DDevMngr);
+  IDirect3D9Ex *pD3D9Ex = nullptr;
+  hr = dx.direct3DCreate9Ex(D3D_SDK_VERSION, &pD3D9Ex);
   if (FAILED(hr)) {
-    DbgLog((LOG_TRACE, 10, L"-> SetD3DDeviceManager failed with hr: %X", hr));
+    DbgLog((LOG_ERROR, 10, L"-> Failed to acquire IDirect3D9Ex"));
+    return E_NOINTERFACE;
+  }
+  m_pD3D = dynamic_cast<IDirect3D9*>(pD3D9Ex);
+
+  // populate the adapter identifier values
+  hr = InitD3DAdapterIdentifier(lAdapter);
+
+  // if the requested adapter failed, try again
+  if (FAILED(hr) && lAdapter != D3DADAPTER_DEFAULT) {
+    lAdapter = D3DADAPTER_DEFAULT;
+    hr = InitD3DAdapterIdentifier(lAdapter);
+  }
+
+  if (FAILED(hr)) {
+    SafeRelease(&m_pD3D);
+    return hr;
+  }
+
+  D3DPRESENT_PARAMETERS d3dpp = { 0 };
+  D3DDISPLAYMODEEX d3ddm = { 0 };
+  d3ddm.Size = sizeof(D3DDISPLAYMODEEX);
+
+  pD3D9Ex->GetAdapterDisplayModeEx(lAdapter, &d3ddm, NULL);
+
+  d3dpp.Windowed = TRUE;
+  d3dpp.BackBufferWidth = 640;
+  d3dpp.BackBufferHeight = 480;
+  d3dpp.BackBufferCount = 0;
+  d3dpp.BackBufferFormat = d3ddm.Format;
+  d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+  d3dpp.Flags = D3DPRESENTFLAG_VIDEO;
+
+  IDirect3DDevice9Ex *pD3D9DeviceEx = nullptr;
+  hr = pD3D9Ex->CreateDeviceEx(lAdapter, D3DDEVTYPE_HAL, GetShellWindow(), D3DCREATE_SOFTWARE_VERTEXPROCESSING | D3DCREATE_MULTITHREADED | D3DCREATE_FPU_PRESERVE, &d3dpp, NULL, &pD3D9DeviceEx);
+  if (FAILED(hr)) {
+    DbgLog((LOG_TRACE, 10, L"-> Creation of device failed with hr: %X", hr));
+    SafeRelease(&m_pD3D);
     return E_FAIL;
   }
+  m_pD3DDev = dynamic_cast<IDirect3DDevice9*>(pD3D9DeviceEx);
 
   return S_OK;
 }
@@ -800,8 +755,7 @@ HRESULT CDecDXVA2::SetD3DDeviceManager(IDirect3DDeviceManager9 *pDevManager)
 
     GUID input = GUID_NULL;
     D3DFORMAT output;
-    bool bHighBitdepth = (m_pAVCtx->codec_id == AV_CODEC_ID_HEVC && (m_pAVCtx->sw_pix_fmt == AV_PIX_FMT_YUV420P10 || m_pAVCtx->profile == FF_PROFILE_HEVC_MAIN_10));
-    hr = FindVideoServiceConversion(m_pAVCtx->codec_id, bHighBitdepth, &input, &output);
+    hr = FindVideoServiceConversion(m_pAVCtx->codec_id, m_pAVCtx->profile, &input, &output);
     if (FAILED(hr)) {
       DbgLog((LOG_TRACE, 10, L"-> No decoder device available that can decode codec '%S' to a matching output", avcodec_get_name(m_pAVCtx->codec_id)));
       goto done;
@@ -863,10 +817,46 @@ STDMETHODIMP CDecDXVA2::Init()
 
   // Initialize all D3D interfaces in non-native mode
   if (!m_bNative) {
-    hr = InitD3D();
+    // load DLLs and functions
+    if (FAILED(hr = LoadDXVA2Functions())) {
+      DbgLog((LOG_ERROR, 10, L"-> Failed to load DXVA2 DLL functions"));
+      return E_FAIL;
+    }
+
+    // determin the adapter the user requested
+    UINT lAdapter = m_pSettings->GetHWAccelDeviceIndex(HWAccel_DXVA2CopyBack, nullptr);
+    if (lAdapter == LAVHWACCEL_DEVICE_DEFAULT)
+      lAdapter = D3DADAPTER_DEFAULT;
+
+    DWORD dwDeviceIndex = m_pCallback->GetGPUDeviceIndex();
+    if (dwDeviceIndex != DWORD_MAX) {
+      lAdapter = (UINT)dwDeviceIndex;
+    }
+
+    // initialize D3D
+    hr = InitD3DEx(lAdapter);
+    if (hr == E_NOINTERFACE) {
+      // D3D9Ex failed, try plain D3D
+      hr = InitD3D(lAdapter);
+    }
+
     if (FAILED(hr)) {
       DbgLog((LOG_TRACE, 10, L"-> D3D Initialization failed with hr: %X", hr));
       return hr;
+    }
+
+    // create device manager for the device
+    hr = CreateD3DDeviceManager(m_pD3DDev, &m_pD3DResetToken, &m_pD3DDevMngr);
+    if (FAILED(hr)) {
+      DbgLog((LOG_TRACE, 10, L"-> Creation of Device manager failed with hr: %X", hr));
+      return E_FAIL;
+    }
+
+    // set it as the active device manager
+    hr = SetD3DDeviceManager(m_pD3DDevMngr);
+    if (FAILED(hr)) {
+      DbgLog((LOG_TRACE, 10, L"-> SetD3DDeviceManager failed with hr: %X", hr));
+      return E_FAIL;
     }
 
     if (CopyFrameNV12 == nullptr) {
@@ -894,25 +884,6 @@ STDMETHODIMP CDecDXVA2::Init()
   return S_OK;
 }
 
-DWORD CDecDXVA2::GetAlignedDimension(DWORD dim)
-{
-  int align = DXVA2_SURFACE_BASE_ALIGN;
-
-  // MPEG-2 needs higher alignment on Intel cards, and it doesn't seem to harm anything to do it for all cards.
-  if (m_nCodecId == AV_CODEC_ID_MPEG2VIDEO)
-    align <<= 1;
-  else if (m_nCodecId == AV_CODEC_ID_HEVC)
-    align = 128;
-
-  return FFALIGN(dim, align);
-}
-
-#define H264_CHECK_PROFILE(profile) \
-  (((profile) & ~FF_PROFILE_H264_CONSTRAINED) <= FF_PROFILE_H264_HIGH)
-
-#define HEVC_CHECK_PROFILE(dec, profile) \
-  ((profile) <= FF_PROFILE_HEVC_MAIN_10)
-
 STDMETHODIMP CDecDXVA2::InitDecoder(AVCodecID codec, const CMediaType *pmt)
 {
   HRESULT hr = S_OK;
@@ -932,6 +903,9 @@ STDMETHODIMP CDecDXVA2::InitDecoder(AVCodecID codec, const CMediaType *pmt)
       if (mediaTypeCheck == *pmt) {
         DbgLog((LOG_TRACE, 10, L"-> Skipping re-init because media type is unchanged."));
         m_MediaType = *pmt;
+
+        // flush the decoder so we can resume decoding properly (before a re-init, EndOfStream would be called, making this necessary)
+        avcodec_flush_buffers(m_pAVCtx);
         return S_OK;
       }
     }
@@ -961,31 +935,29 @@ STDMETHODIMP CDecDXVA2::InitDecoder(AVCodecID codec, const CMediaType *pmt)
   // If we don't have one yet, it may be handed to us later, and compat is checked at that point
   GUID input = GUID_NULL;
   D3DFORMAT output = D3DFMT_UNKNOWN;
-  bool bHighBitdepth = (m_pAVCtx->codec_id == AV_CODEC_ID_HEVC && (m_pAVCtx->sw_pix_fmt == AV_PIX_FMT_YUV420P10 || m_pAVCtx->profile == FF_PROFILE_HEVC_MAIN_10));
   if (m_pDXVADecoderService) {
-    hr = FindVideoServiceConversion(codec, bHighBitdepth, &input, &output);
+    hr = FindVideoServiceConversion(codec, m_pAVCtx->profile, &input, &output);
     if (FAILED(hr)) {
       DbgLog((LOG_TRACE, 10, L"-> No decoder device available that can decode codec '%S' to a matching output", avcodec_get_name(codec)));
       return E_FAIL;
     }
   } else {
+    bool bHighBitdepth = (m_pAVCtx->codec_id == AV_CODEC_ID_HEVC && (m_pAVCtx->sw_pix_fmt == AV_PIX_FMT_YUV420P10 || m_pAVCtx->profile == FF_PROFILE_HEVC_MAIN_10))
+                      || (m_pAVCtx->codec_id == AV_CODEC_ID_VP9 && (m_pAVCtx->sw_pix_fmt == AV_PIX_FMT_YUV420P10 || m_pAVCtx->profile == FF_PROFILE_VP9_2));
     if (bHighBitdepth)
       output = (D3DFORMAT)FOURCC_P010;
     else
       output = (D3DFORMAT)FOURCC_NV12;
   }
 
-  if (((codec == AV_CODEC_ID_H264 || codec == AV_CODEC_ID_MPEG2VIDEO) && m_pAVCtx->pix_fmt != AV_PIX_FMT_YUV420P && m_pAVCtx->pix_fmt != AV_PIX_FMT_YUVJ420P && m_pAVCtx->pix_fmt != AV_PIX_FMT_DXVA2_VLD && m_pAVCtx->pix_fmt != AV_PIX_FMT_NONE)
-    || (codec == AV_CODEC_ID_H264 && m_pAVCtx->profile != FF_PROFILE_UNKNOWN && !H264_CHECK_PROFILE(m_pAVCtx->profile))
-    || ((codec == AV_CODEC_ID_WMV3 || codec == AV_CODEC_ID_VC1) && m_pAVCtx->profile == FF_PROFILE_VC1_COMPLEX)
-    || (codec == AV_CODEC_ID_HEVC && (!HEVC_CHECK_PROFILE(this, m_pAVCtx->profile) || (m_pAVCtx->pix_fmt != AV_PIX_FMT_YUV420P && m_pAVCtx->pix_fmt != AV_PIX_FMT_YUVJ420P && m_pAVCtx->pix_fmt != AV_PIX_FMT_YUV420P10 && m_pAVCtx->pix_fmt != AV_PIX_FMT_DXVA2_VLD && m_pAVCtx->pix_fmt != AV_PIX_FMT_NONE)))
-    || (codec == AV_CODEC_ID_VP9 && (m_pAVCtx->profile > 0 || (m_pAVCtx->pix_fmt != AV_PIX_FMT_YUV420P && m_pAVCtx->pix_fmt != AV_PIX_FMT_DXVA2_VLD && m_pAVCtx->pix_fmt != AV_PIX_FMT_NONE)))) {
+  if (check_dxva_codec_profile(m_pAVCtx->codec_id, m_pAVCtx->pix_fmt, m_pAVCtx->profile, AV_PIX_FMT_DXVA2_VLD))
+  {
     DbgLog((LOG_TRACE, 10, L"-> Incompatible profile detected, falling back to software decoding"));
     return E_FAIL;
   }
 
-  m_dwSurfaceWidth = GetAlignedDimension(m_pAVCtx->coded_width);
-  m_dwSurfaceHeight = GetAlignedDimension(m_pAVCtx->coded_height);
+  m_dwSurfaceWidth = dxva_align_dimensions(m_pAVCtx->codec_id, m_pAVCtx->coded_width);
+  m_dwSurfaceHeight = dxva_align_dimensions(m_pAVCtx->codec_id, m_pAVCtx->coded_height);
   m_eSurfaceFormat = output;
 
   if (FAILED(CheckHWCompatConditions(input))) {
@@ -997,7 +969,7 @@ STDMETHODIMP CDecDXVA2::InitDecoder(AVCodecID codec, const CMediaType *pmt)
   return S_OK;
 }
 
-STDMETHODIMP_(long) CDecDXVA2::GetBufferCount()
+STDMETHODIMP_(long) CDecDXVA2::GetBufferCount(long *pMaxBuffers)
 {
   long buffers = 0;
 
@@ -1021,6 +993,17 @@ STDMETHODIMP_(long) CDecDXVA2::GetBufferCount()
   if (m_pCallback->GetDecodeFlags() & LAV_VIDEO_DEC_FLAG_DVD) {
     buffers += 4;
   }
+
+  if (pMaxBuffers)
+  {
+    // cap at 127, because it needs to fit into the 7-bit DXVA structs
+    *pMaxBuffers = 127;
+
+    // VC-1 and VP9 decoding has stricter requirements (decoding flickers otherwise)
+    if (m_nCodecId == AV_CODEC_ID_VC1 || m_nCodecId == AV_CODEC_ID_VP9)
+      *pMaxBuffers = 32;
+  }
+
   return buffers;
 }
 
@@ -1079,13 +1062,12 @@ HRESULT CDecDXVA2::CreateDXVA2Decoder(int nSurfaces, IDirect3DSurface9 **ppSurfa
   DestroyDecoder(false, true);
 
   GUID input = GUID_NULL;
-  bool bHighBitdepth = (m_pAVCtx->codec_id == AV_CODEC_ID_HEVC && (m_pAVCtx->sw_pix_fmt == AV_PIX_FMT_YUV420P10 || m_pAVCtx->profile == FF_PROFILE_HEVC_MAIN_10));
   D3DFORMAT output;
-  FindVideoServiceConversion(m_pAVCtx->codec_id, bHighBitdepth, &input, &output);
+  FindVideoServiceConversion(m_pAVCtx->codec_id, m_pAVCtx->profile, &input, &output);
 
   if (!nSurfaces) {
-    m_dwSurfaceWidth = GetAlignedDimension(m_pAVCtx->coded_width);
-    m_dwSurfaceHeight = GetAlignedDimension(m_pAVCtx->coded_height);
+    m_dwSurfaceWidth = dxva_align_dimensions(m_pAVCtx->codec_id, m_pAVCtx->coded_width);
+    m_dwSurfaceHeight = dxva_align_dimensions(m_pAVCtx->codec_id, m_pAVCtx->coded_height);
     m_eSurfaceFormat = output;
     m_DecoderPixelFormat = m_pAVCtx->sw_pix_fmt;
 
@@ -1233,7 +1215,7 @@ HRESULT CDecDXVA2::ReInitDXVA2Decoder(AVCodecContext *c)
   if (m_bInInit)
     return S_FALSE;
 
-  if (!m_pDecoder || GetAlignedDimension(c->coded_width) != m_dwSurfaceWidth || GetAlignedDimension(c->coded_height) != m_dwSurfaceHeight || m_DecoderPixelFormat != c->sw_pix_fmt) {
+  if (!m_pDecoder || dxva_align_dimensions(c->codec_id, c->coded_width) != m_dwSurfaceWidth || dxva_align_dimensions(c->codec_id, c->coded_height) != m_dwSurfaceHeight || m_DecoderPixelFormat != c->sw_pix_fmt) {
     DbgLog((LOG_TRACE, 10, L"No DXVA2 Decoder or image dimensions changed -> Re-Allocating resources"));
     if (!m_pDecoder && m_bNative && !m_pDXVA2Allocator) {
       ASSERT(0);
@@ -1241,13 +1223,12 @@ HRESULT CDecDXVA2::ReInitDXVA2Decoder(AVCodecContext *c)
     } else if (m_bNative) {
       avcodec_flush_buffers(c);
 
-      m_dwSurfaceWidth  = GetAlignedDimension(c->coded_width);
-      m_dwSurfaceHeight = GetAlignedDimension(c->coded_height);
+      m_dwSurfaceWidth  = dxva_align_dimensions(c->codec_id, c->coded_width);
+      m_dwSurfaceHeight = dxva_align_dimensions(c->codec_id, c->coded_height);
       m_DecoderPixelFormat = c->sw_pix_fmt;
 
       GUID input;
-      bool bHighBitdepth = (c->codec_id == AV_CODEC_ID_HEVC && (c->sw_pix_fmt == AV_PIX_FMT_YUV420P10 || c->profile == FF_PROFILE_HEVC_MAIN_10));
-      FindVideoServiceConversion(c->codec_id, bHighBitdepth, &input, &m_eSurfaceFormat);
+      FindVideoServiceConversion(c->codec_id, c->profile, &input, &m_eSurfaceFormat);
 
       // Re-Commit the allocator (creates surfaces and new decoder)
       hr = m_pDXVA2Allocator->Decommit();
@@ -1281,8 +1262,8 @@ int CDecDXVA2::get_dxva2_buffer(struct AVCodecContext *c, AVFrame *pic, int flag
 
   if (pic->format != AV_PIX_FMT_DXVA2_VLD ||
     (c->codec_id == AV_CODEC_ID_H264 && !H264_CHECK_PROFILE(c->profile)) ||
-    (c->codec_id == AV_CODEC_ID_HEVC && !HEVC_CHECK_PROFILE(pDec, c->profile)) ||
-    (c->codec_id == AV_CODEC_ID_VP9 && c->profile > 0)) {
+    (c->codec_id == AV_CODEC_ID_HEVC && !HEVC_CHECK_PROFILE(c->profile)) ||
+    (c->codec_id == AV_CODEC_ID_VP9 && !VP9_CHECK_PROFILE(c->profile))) {
     DbgLog((LOG_ERROR, 10, L"DXVA2 buffer request, but not dxva2 pixfmt or unsupported profile"));
     pDec->m_bFailHWDecode = TRUE;
     return -1;
@@ -1524,7 +1505,7 @@ STDMETHODIMP CDecDXVA2::GetPixelFormat(LAVPixelFormat *pPix, int *pBpp)
     if (m_bNative)
       *pPix = LAVPixFmt_DXVA2;
     else
-      *pPix = (m_eSurfaceFormat == FOURCC_P010 || m_eSurfaceFormat == FOURCC_P016) ? LAVPixFmt_P010 : LAVPixFmt_NV12;
+      *pPix = (m_eSurfaceFormat == FOURCC_P010 || m_eSurfaceFormat == FOURCC_P016) ? LAVPixFmt_P016 : LAVPixFmt_NV12;
   }
   if (pBpp)
     *pBpp = (m_eSurfaceFormat == FOURCC_P016) ? 16 : ((m_eSurfaceFormat == FOURCC_P010) ? 10 : 8);
@@ -1552,8 +1533,12 @@ __forceinline bool CDecDXVA2::CopyFrame(LAVFrame *pFrame)
   pFrame->destruct  = nullptr;
   pFrame->priv_data = nullptr;
 
+  // side-data shall not be copied to tmpFrame
+  tmpFrame.side_data = nullptr;
+  tmpFrame.side_data_count = 0;
+
   // Allocate memory buffers
-  hr = AllocLAVFrameBuffers(pFrame, (pFrame->format == LAVPixFmt_P010) ? (LockedRect.Pitch >> 1) : LockedRect.Pitch);
+  hr = AllocLAVFrameBuffers(pFrame, (pFrame->format == LAVPixFmt_P016) ? (LockedRect.Pitch >> 1) : LockedRect.Pitch);
   if (FAILED(hr)) {
     pSurface->UnlockRect();
     *pFrame = tmpFrame;

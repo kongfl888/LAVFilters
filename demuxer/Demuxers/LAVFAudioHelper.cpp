@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -50,6 +50,9 @@ static FormatMapping audio_map[] = {
   { AV_CODEC_ID_PCM_S24LE,  &MEDIASUBTYPE_PCM,               WAVE_FORMAT_PCM,        nullptr },
   { AV_CODEC_ID_PCM_S32LE,  &MEDIASUBTYPE_PCM,               WAVE_FORMAT_PCM,        nullptr },
   { AV_CODEC_ID_PCM_F32LE,  &MEDIASUBTYPE_IEEE_FLOAT,        WAVE_FORMAT_IEEE_FLOAT, nullptr },
+  { AV_CODEC_ID_PCM_S16LE_PLANAR, &MEDIASUBTYPE_PCM,         WAVE_FORMAT_PCM,        nullptr },
+  { AV_CODEC_ID_PCM_S24LE_PLANAR, &MEDIASUBTYPE_PCM,         WAVE_FORMAT_PCM,        nullptr },
+  { AV_CODEC_ID_PCM_S32LE_PLANAR, &MEDIASUBTYPE_PCM,         WAVE_FORMAT_PCM,        nullptr },
   { AV_CODEC_ID_WMAV1,      &MEDIASUBTYPE_MSAUDIO1,          WAVE_FORMAT_MSAUDIO1,   nullptr },
   { AV_CODEC_ID_WMAV2,      &MEDIASUBTYPE_WMAUDIO2,          WAVE_FORMAT_WMAUDIO2,   nullptr },
   { AV_CODEC_ID_WMAPRO,     &MEDIASUBTYPE_WMAUDIO3,          WAVE_FORMAT_WMAUDIO3,   nullptr },
@@ -72,6 +75,7 @@ static FormatMapping audio_map[] = {
   { AV_CODEC_ID_TAK,        &MEDIASUBTYPE_TAK,               0,                      nullptr },
   { AV_CODEC_ID_S302M,      &MEDIASUBTYPE_AES3,              0,                      nullptr },
   { AV_CODEC_ID_PCM_S16BE,  &MEDIASUBTYPE_PCM_TWOS,          0,                      nullptr },
+  { AV_CODEC_ID_PCM_S16BE_PLANAR, &MEDIASUBTYPE_PCM_TWOS,    0,                      nullptr },
   { AV_CODEC_ID_PCM_S24BE,  &MEDIASUBTYPE_PCM_IN24,          0,                      nullptr },
   { AV_CODEC_ID_PCM_S32BE,  &MEDIASUBTYPE_PCM_IN32,          0,                      nullptr },
   { AV_CODEC_ID_QDM2,       &MEDIASUBTYPE_QDM2,              WAVE_FORMAT_QDESIGN_MUSIC, nullptr },
@@ -84,7 +88,7 @@ static FormatMapping audio_map[] = {
   { AV_CODEC_ID_DSD_MSBF_PLANAR, &MEDIASUBTYPE_DSD8,         0,                      nullptr },
 };
 
-CMediaType CLAVFAudioHelper::initAudioType(AVCodecID codecId, unsigned int &codecTag, std::string container)
+CMediaType CLAVFAudioHelper::initAudioType(AVCodecParameters *codecpar, unsigned int &codecTag, std::string container)
 {
   CMediaType mediaType;
   mediaType.InitMediaType();
@@ -95,19 +99,19 @@ CMediaType CLAVFAudioHelper::initAudioType(AVCodecID codecId, unsigned int &code
 
   // Check against values from the map above
   for(unsigned i = 0; i < countof(audio_map); ++i) {
-    if (audio_map[i].codec == codecId) {
+    if (audio_map[i].codec == codecpar->codec_id) {
       if (audio_map[i].subtype)
         mediaType.subtype = *audio_map[i].subtype;
       if (audio_map[i].codecTag)
         codecTag = audio_map[i].codecTag;
       if (audio_map[i].format)
-         mediaType.formattype = *audio_map[i].format;
+        mediaType.formattype = *audio_map[i].format;
       break;
     }
   }
 
   // special cases
-  switch(codecId)
+  switch(codecpar->codec_id)
   {
   case AV_CODEC_ID_PCM_F64LE:
     // Qt PCM

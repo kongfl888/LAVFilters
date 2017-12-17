@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -67,7 +67,7 @@ class CLAVFAudioHelper
 {
 public:
   CLAVFAudioHelper() {};
-  CMediaType initAudioType(AVCodecID codecId, unsigned int &codecTag, std::string container);
+  CMediaType initAudioType(AVCodecParameters *codecpar, unsigned int &codecTag, std::string container);
 
   WAVEFORMATEX *CreateWVFMTEX(const AVStream *avstream, ULONG *size);
   WAVEFORMATEXFFMPEG *CreateWVFMTEX_FF(const AVStream *avstream, ULONG *size);

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -235,9 +235,11 @@ static struct PixelFormatMapping {
   { AV_PIX_FMT_YUV440P12LE,  LAVPixFmt_YUV444bX, TRUE, 12 },
   { AV_PIX_FMT_YUV440P12BE,  LAVPixFmt_YUV444bX, TRUE, 12 },
 
-  { AV_PIX_FMT_P010LE, LAVPixFmt_P010, FALSE, 10 },
+  { AV_PIX_FMT_P010LE, LAVPixFmt_P016, FALSE, 10 },
+  { AV_PIX_FMT_P016LE, LAVPixFmt_P016, FALSE, 16 },
 
   { AV_PIX_FMT_DXVA2_VLD, LAVPixFmt_DXVA2, FALSE },
+  { AV_PIX_FMT_D3D11, LAVPixFmt_D3D11, FALSE },
 };
 
 static AVCodecID ff_interlace_capable[] = {
@@ -312,18 +314,20 @@ STDMETHODIMP CDecAvcodec::InitDecoder(AVCodecID codec, const CMediaType *pmt)
   m_pAVCtx = avcodec_alloc_context3(m_pAVCodec);
   CheckPointer(m_pAVCtx, E_POINTER);
 
+  DWORD dwDecFlags = m_pCallback->GetDecodeFlags();
+
+  // Use parsing for mpeg1/2 at all times, or H264/HEVC when its not from LAV Splitter
   if(    codec == AV_CODEC_ID_MPEG1VIDEO
       || codec == AV_CODEC_ID_MPEG2VIDEO
-      || pmt->subtype == MEDIASUBTYPE_H264
-      || pmt->subtype == MEDIASUBTYPE_h264
-      || pmt->subtype == MEDIASUBTYPE_X264
-      || pmt->subtype == MEDIASUBTYPE_x264
-      || pmt->subtype == MEDIASUBTYPE_H264_bis
-      || pmt->subtype == MEDIASUBTYPE_HEVC) {
+      || (!(dwDecFlags & LAV_VIDEO_DEC_FLAG_LAVSPLITTER) &&
+         (pmt->subtype == MEDIASUBTYPE_H264
+       || pmt->subtype == MEDIASUBTYPE_h264
+       || pmt->subtype == MEDIASUBTYPE_X264
+       || pmt->subtype == MEDIASUBTYPE_x264
+       || pmt->subtype == MEDIASUBTYPE_H264_bis
+       || pmt->subtype == MEDIASUBTYPE_HEVC))) {
     m_pParser = av_parser_init(codec);
   }
-
-  DWORD dwDecFlags = m_pCallback->GetDecodeFlags();
 
   LONG biRealWidth = pBMI->biWidth, biRealHeight = pBMI->biHeight;
   if (pmt->formattype == FORMAT_VideoInfo || pmt->formattype == FORMAT_MPEGVideo) {
@@ -346,14 +350,14 @@ STDMETHODIMP CDecAvcodec::InitDecoder(AVCodecID codec, const CMediaType *pmt)
   m_pAVCtx->coded_height          = abs(pBMI->biHeight);
   m_pAVCtx->bits_per_coded_sample = pBMI->biBitCount;
   m_pAVCtx->err_recognition       = 0;
-  m_pAVCtx->workaround_bugs       = FF_BUG_AUTODETECT | FF_BUG_X264_LOSSLESS;
+  m_pAVCtx->workaround_bugs       = FF_BUG_AUTODETECT;
   m_pAVCtx->refcounted_frames     = 1;
 
   // Setup threading
   // Thread Count. 0 = auto detect
   int thread_count = m_pSettings->GetNumThreads();
   if (thread_count == 0) {
-    thread_count = av_cpu_count() * 3 / 2;
+    thread_count = av_cpu_count();
   }
   m_pAVCtx->thread_count = max(1, min(thread_count, AVCODEC_MAX_THREADS));
 
@@ -425,6 +429,30 @@ STDMETHODIMP CDecAvcodec::InitDecoder(AVCodecID codec, const CMediaType *pmt)
         extralen -= sizeof(AVPixelFormat);
         memmove(extra, extra+sizeof(AVPixelFormat), extralen);
       }
+    } else if (codec == AV_CODEC_ID_VP9) {
+      // read custom vpcC headers
+      if (extralen >= 16) {
+        extra = (uint8_t *)av_mallocz(extralen + FF_INPUT_BUFFER_PADDING_SIZE);
+        getExtraData(*pmt, extra, nullptr);
+
+        if (AV_RB32(extra) == MKBETAG('v', 'p', 'c', 'C') && AV_RB8(extra + 4) == 1) {
+          m_pAVCtx->profile = AV_RB8(extra + 8);
+          m_pAVCtx->color_primaries = (AVColorPrimaries)AV_RB8(extra + 11);
+          m_pAVCtx->color_trc = (AVColorTransferCharacteristic)AV_RB8(extra + 12);
+          m_pAVCtx->colorspace = (AVColorSpace)AV_RB8(extra + 13);
+
+          int bitdepth = AV_RB8(extra + 10) >> 4;
+          if (m_pAVCtx->profile == 2 && bitdepth == 10) {
+            m_pAVCtx->pix_fmt = AV_PIX_FMT_YUV420P10;
+          }
+          else if (m_pAVCtx->profile == 2 && bitdepth == 12) {
+            m_pAVCtx->pix_fmt = AV_PIX_FMT_YUV420P12;
+          }
+        }
+
+        av_freep(&extra);
+        extralen = 0;
+      }
     } else {
       // Just copy extradata for other formats
       extra = (uint8_t *)av_mallocz(extralen + FF_INPUT_BUFFER_PADDING_SIZE);
@@ -455,7 +483,7 @@ STDMETHODIMP CDecAvcodec::InitDecoder(AVCodecID codec, const CMediaType *pmt)
   LAVPinInfo lavPinInfo = {0};
   BOOL bLAVInfoValid = SUCCEEDED(m_pCallback->GetLAVPinInfo(lavPinInfo));
 
-  m_bInputPadded = dwDecFlags & LAV_VIDEO_DEC_FLAG_LAVSPLITTER;
+  m_bInputPadded = (dwDecFlags & LAV_VIDEO_DEC_FLAG_LAVSPLITTER);
 
   // Setup codec-specific timing logic
 
@@ -546,6 +574,10 @@ STDMETHODIMP CDecAvcodec::InitDecoder(AVCodecID codec, const CMediaType *pmt)
     return VFW_E_UNSUPPORTED_VIDEO;
   }
 
+  if (codec == AV_CODEC_ID_H264 && m_nx264build != -1) {
+    av_opt_set_int(m_pAVCtx->priv_data, "x264_build", m_nx264build, 0);
+  }
+
   m_iInterlaced = 0;
   for (int i = 0; i < countof(ff_interlace_capable); i++) {
     if (codec == ff_interlace_capable[i]) {
@@ -604,6 +636,12 @@ STDMETHODIMP CDecAvcodec::DestroyDecoder()
   }
 
   if (m_pAVCtx) {
+    if (m_pAVCtx->codec_id == AV_CODEC_ID_H264) {
+      int64_t x264build = -1;
+      if (av_opt_get_int(m_pAVCtx->priv_data, "x264_build", 0, &x264build) >= 0)
+        m_nx264build = (int)x264build;
+    }
+
     avcodec_close(m_pAVCtx);
     av_freep(&m_pAVCtx->hwaccel_context);
     av_freep(&m_pAVCtx->extradata);
@@ -613,9 +651,6 @@ STDMETHODIMP CDecAvcodec::DestroyDecoder()
 
   av_freep(&m_pFFBuffer);
   m_nFFBufferSize = 0;
-
-  av_freep(&m_pFFBuffer2);
-  m_nFFBufferSize2 = 0;
 
   if (m_pSwsContext) {
     sws_freeContext(m_pSwsContext);
@@ -633,208 +668,322 @@ static void lav_avframe_free(LAVFrame *frame)
   av_frame_free((AVFrame **)&frame->priv_data);
 }
 
-STDMETHODIMP CDecAvcodec::Decode(const BYTE *buffer, int buflen, REFERENCE_TIME rtStartIn, REFERENCE_TIME rtStopIn, BOOL bSyncPoint, BOOL bDiscontinuity, IMediaSample *pSample)
+static void avpacket_mediasample_free(void *opaque, uint8_t *buffer)
 {
-  CheckPointer(m_pAVCtx, E_UNEXPECTED);
+  IMediaSample *pSample = (IMediaSample *)opaque;
+  SafeRelease(&pSample);
+}
 
-  int     got_picture = 0;
-  int     used_bytes  = 0;
-  BOOL    bFlush = (buffer == nullptr);
-  BOOL    bEndOfSequence = FALSE;
-  const MediaSideDataFFMpeg *pFFSideData = nullptr;
+STDMETHODIMP CDecAvcodec::FillAVPacketData(AVPacket *avpkt, const uint8_t *buffer, int buflen, IMediaSample *pSample, bool bRefCounting)
+{
+  if (m_bInputPadded && (m_pParser == nullptr))
+  {
+    avpkt->data = (uint8_t *)buffer;
+    avpkt->size = buflen;
 
-  AVPacket avpkt;
-  av_init_packet(&avpkt);
-
-  if (m_pAVCtx->active_thread_type & FF_THREAD_FRAME) {
-    if (!m_bFFReordering) {
-      m_tcThreadBuffer[m_CurrentThread].rtStart = rtStartIn;
-      m_tcThreadBuffer[m_CurrentThread].rtStop  = rtStopIn;
-    }
-
-    m_CurrentThread = (m_CurrentThread + 1) % m_pAVCtx->thread_count;
-  } else if (m_bBFrameDelay) {
-    m_tcBFrameDelay[m_nBFramePos].rtStart = rtStartIn;
-    m_tcBFrameDelay[m_nBFramePos].rtStop = rtStopIn;
-    m_nBFramePos = !m_nBFramePos;
-  }
-
-  uint8_t *pDataBuffer = nullptr;
-  if (!bFlush && buflen > 0) {
-    if (!m_bInputPadded && (!(m_pAVCtx->active_thread_type & FF_THREAD_FRAME) || m_pParser)) {
-      // Copy bitstream into temporary buffer to ensure overread protection
-      // Verify buffer size
-      if (buflen > m_nFFBufferSize) {
-        m_nFFBufferSize	= buflen;
-        m_pFFBuffer = (BYTE *)av_realloc_f(m_pFFBuffer, m_nFFBufferSize + FF_INPUT_BUFFER_PADDING_SIZE, 1);
-        if (!m_pFFBuffer) {
-          m_nFFBufferSize = 0;
-          return E_OUTOFMEMORY;
-        }
+    if (pSample && bRefCounting && m_pCallback->HasDynamicInputAllocator())
+    {
+      avpkt->buf = av_buffer_create(avpkt->data, avpkt->size, avpacket_mediasample_free, pSample, AV_BUFFER_FLAG_READONLY);
+      if (!avpkt->buf) {
+        return E_OUTOFMEMORY;
       }
-      
-      memcpy(m_pFFBuffer, buffer, buflen);
-      memset(m_pFFBuffer+buflen, 0, FF_INPUT_BUFFER_PADDING_SIZE);
-      pDataBuffer = m_pFFBuffer;
-    } else {
-      pDataBuffer = (uint8_t *)buffer;
-    }
-
-    if (m_nCodecId == AV_CODEC_ID_VP8 && m_bWaitingForKeyFrame) {
-      if (!(pDataBuffer[0] & 1)) {
-        DbgLog((LOG_TRACE, 10, L"::Decode(): Found VP8 key-frame, resuming decoding"));
-        m_bWaitingForKeyFrame = FALSE;
-      } else {
-        return S_OK;
-      }
+      pSample->AddRef();
     }
   }
+  else
+  {
+    // create fresh packet
+    if (av_new_packet(avpkt, buflen) < 0)
+      return E_OUTOFMEMORY;
 
+    // copy data over
+    memcpy(avpkt->data, buffer, buflen);
+  }
 
+  // copy side-data from input sample
   if (pSample) {
     IMediaSideData *pSideData = nullptr;
     if (SUCCEEDED(pSample->QueryInterface(&pSideData))) {
       size_t nFFSideDataSize = 0;
+      const MediaSideDataFFMpeg *pFFSideData = nullptr;
       if (FAILED(pSideData->GetSideData(IID_MediaSideDataFFMpeg, (const BYTE **)&pFFSideData, &nFFSideDataSize)) || nFFSideDataSize != sizeof(MediaSideDataFFMpeg)) {
         pFFSideData = nullptr;
       }
 
       SafeRelease(&pSideData);
+      CopyMediaSideDataFF(avpkt, &pFFSideData);
     }
   }
 
+  return S_OK;
+}
+
+STDMETHODIMP CDecAvcodec::Decode(const BYTE *buffer, int buflen, REFERENCE_TIME rtStartIn, REFERENCE_TIME rtStopIn, BOOL bSyncPoint, BOOL bDiscontinuity, IMediaSample *pSample)
+{
+  CheckPointer(m_pAVCtx, E_UNEXPECTED);
+
+  // Put timestamps into the buffers if appropriate
+  if (m_pAVCtx->active_thread_type & FF_THREAD_FRAME)
+  {
+    if (!m_bFFReordering) {
+      m_tcThreadBuffer[m_CurrentThread].rtStart = rtStartIn;
+      m_tcThreadBuffer[m_CurrentThread].rtStop = rtStopIn;
+    }
+
+    m_CurrentThread = (m_CurrentThread + 1) % m_pAVCtx->thread_count;
+  }
+  else if (m_bBFrameDelay) {
+    m_tcBFrameDelay[m_nBFramePos].rtStart = rtStartIn;
+    m_tcBFrameDelay[m_nBFramePos].rtStop = rtStopIn;
+    m_nBFramePos = !m_nBFramePos;
+  }
+
+  // if we have a parser, it'll handle calling the decode function
+  if (m_pParser)
+  {
+    return ParsePacket(buffer, buflen, rtStartIn, rtStopIn, pSample);
+  }
+  else
+  {
+    // Flush the decoder if appropriate
+    if (buffer == nullptr)
+    {
+      return DecodePacket(nullptr, AV_NOPTS_VALUE, AV_NOPTS_VALUE);
+    }
+
+    // build an AVPacket
+    AVPacket *avpkt = av_packet_alloc();
+
+    // set data pointers
+    if (FAILED(FillAVPacketData(avpkt, buffer, buflen, pSample, true)))
+    {
+      return E_OUTOFMEMORY;
+    }
+
+    // timestamps
+    avpkt->pts = rtStartIn;
+    if (rtStartIn != AV_NOPTS_VALUE && rtStopIn != AV_NOPTS_VALUE)
+      avpkt->duration = (int)(rtStopIn - rtStartIn);
+
+    // flags
+    avpkt->flags = bSyncPoint ? AV_PKT_FLAG_KEY : 0;
+
+    // perform decoding
+    HRESULT hr = DecodePacket(avpkt, rtStartIn, rtStopIn);
+
+    // free packet after
+    av_packet_free(&avpkt);
+
+    // forward decoding failures, should only happen when a hardware decoder fails
+    if (FAILED(hr)) {
+      return hr;
+    }
+  }
+
+  return S_OK;
+}
+
+STDMETHODIMP CDecAvcodec::ParsePacket(const BYTE *buffer, int buflen, REFERENCE_TIME rtStartIn, REFERENCE_TIME rtStopIn, IMediaSample *pSample)
+{
+  BOOL bFlush = (buffer == NULL);
+  int used_bytes = 0;
+  uint8_t *pDataBuffer = (uint8_t *)buffer;
+  HRESULT hr = S_OK;
+
+  // re-allocate with padding, if needed
+  if (m_bInputPadded == false && buflen > 0) {
+    // re-allocate buffer to have enough space
+    BYTE *pBuf = (BYTE *)av_fast_realloc(m_pFFBuffer, &m_nFFBufferSize, buflen + AV_INPUT_BUFFER_PADDING_SIZE);
+    if (!pBuf)
+      return E_FAIL;
+
+    m_pFFBuffer = pBuf;
+
+    // copy data to buffer
+    memcpy(m_pFFBuffer, buffer, buflen);
+    memset(m_pFFBuffer + buflen, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+    pDataBuffer = m_pFFBuffer;
+  }
+
+  // loop over the data buffer until the parser has consumed all data
   while (buflen > 0 || bFlush) {
     REFERENCE_TIME rtStart = rtStartIn, rtStop = rtStopIn;
 
-    if (!bFlush) {
-      avpkt.data = pDataBuffer;
-      avpkt.size = buflen;
-      avpkt.pts = rtStartIn;
-      if (rtStartIn != AV_NOPTS_VALUE && rtStopIn != AV_NOPTS_VALUE)
-        avpkt.duration = (int)(rtStopIn - rtStartIn);
-      else
-        avpkt.duration = 0;
-      avpkt.flags = AV_PKT_FLAG_KEY;
+    uint8_t *pOutBuffer = nullptr;
+    int pOutLen = 0;
 
-      CopyMediaSideDataFF(&avpkt, &pFFSideData);
+    used_bytes = av_parser_parse2(m_pParser, m_pAVCtx, &pOutBuffer, &pOutLen, pDataBuffer, buflen, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
 
-      if (m_bHasPalette) {
-        m_bHasPalette = FALSE;
-        uint32_t *pal = (uint32_t *)av_packet_new_side_data(&avpkt, AV_PKT_DATA_PALETTE, AVPALETTE_SIZE);
-        int pal_size = FFMIN((1 << m_pAVCtx->bits_per_coded_sample) << 2, m_pAVCtx->extradata_size);
-        uint8_t *pal_src = m_pAVCtx->extradata + m_pAVCtx->extradata_size - pal_size;
-
-        for (int i = 0; i < pal_size/4; i++)
-          pal[i] = 0xFF<<24 | AV_RL32(pal_src+4*i);
-      }
-    } else {
-      avpkt.data = nullptr;
-      avpkt.size = 0;
+    if (used_bytes == 0 && pOutLen == 0 && !bFlush) {
+      DbgLog((LOG_TRACE, 50, L"::Decode() - could not process buffer, starving?"));
+      break;
+    }
+    else if (used_bytes > 0)
+    {
+      buflen -= used_bytes;
+      pDataBuffer += used_bytes;
     }
 
-    // Parse the data if a parser is present
-    // This is mandatory for MPEG-1/2
-    if (m_pParser) {
-      BYTE *pOut = nullptr;
-      int pOut_size = 0;
-
-      used_bytes = av_parser_parse2(m_pParser, m_pAVCtx, &pOut, &pOut_size, avpkt.data, avpkt.size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
-
-      if (used_bytes == 0 && pOut_size == 0 && !bFlush) {
-        DbgLog((LOG_TRACE, 50, L"::Decode() - could not process buffer, starving?"));
-        break;
-      } else if (used_bytes > 0) {
-        buflen -= used_bytes;
-        pDataBuffer += used_bytes;
-      }
-
-      // Update start time cache
-      // If more data was read then output, update the cache (incomplete frame)
-      // If output is bigger, a frame was completed, update the actual rtStart with the cached value, and then overwrite the cache
-      if (used_bytes > pOut_size) {
-        if (rtStartIn != AV_NOPTS_VALUE)
-          m_rtStartCache = rtStartIn;
-      } else if (used_bytes == pOut_size || ((used_bytes + 9) == pOut_size)) {
-        // Why +9 above?
-        // Well, apparently there are some broken MKV muxers that like to mux the MPEG-2 PICTURE_START_CODE block (which is 9 bytes) in the package with the previous frame
-        // This would cause the frame timestamps to be delayed by one frame exactly, and cause timestamp reordering to go wrong.
-        // So instead of failing on those samples, lets just assume that 9 bytes are that case exactly.
-        m_rtStartCache = rtStartIn = AV_NOPTS_VALUE;
-      } else if (pOut_size > used_bytes) {
-        rtStart = m_rtStartCache;
+    // Update start time cache
+    // If more data was read then output, update the cache (incomplete frame)
+    // If output is bigger, a frame was completed, update the actual rtStart with the cached value, and then overwrite the cache
+    if (used_bytes > pOutLen) {
+      if (rtStartIn != AV_NOPTS_VALUE)
         m_rtStartCache = rtStartIn;
-        // The value was used once, don't use it for multiple frames, that ends up in weird timings
-        rtStartIn = AV_NOPTS_VALUE;
-      }
-
-      if (pOut_size > 0 || bFlush) {
-
-        if (pOut && pOut_size > 0) {
-          if (pOut_size > m_nFFBufferSize2) {
-            m_nFFBufferSize2	= pOut_size;
-            m_pFFBuffer2 = (BYTE *)av_realloc_f(m_pFFBuffer2, m_nFFBufferSize2 + FF_INPUT_BUFFER_PADDING_SIZE, 1);
-            if (!m_pFFBuffer2) {
-              m_nFFBufferSize2 = 0;
-              av_packet_unref(&avpkt);
-              return E_OUTOFMEMORY;
-            }
-          }
-          memcpy(m_pFFBuffer2, pOut, pOut_size);
-          memset(m_pFFBuffer2+pOut_size, 0, FF_INPUT_BUFFER_PADDING_SIZE);
-
-          avpkt.data = m_pFFBuffer2;
-          avpkt.size = pOut_size;
-          avpkt.pts = rtStart;
-          avpkt.duration = 0;
-
-          int state = CheckForSequenceMarkers(m_nCodecId, avpkt.data, avpkt.size, &m_MpegParserState);
-          if (state & STATE_EOS_FOUND) {
-            bEndOfSequence = TRUE;
-          }
-          if (state & STATE_GOP_FOUND && m_nCodecId == AV_CODEC_ID_MPEG2VIDEO) {
-            m_bWaitingForKeyFrame = FALSE;
-          }
-        } else {
-          avpkt.data = nullptr;
-          avpkt.size = 0;
-        }
-
-        int ret2 = avcodec_decode_video2 (m_pAVCtx, m_pFrame, &got_picture, &avpkt);
-        if (ret2 < 0) {
-          DbgLog((LOG_TRACE, 50, L"::Decode() - decoding failed despite successfull parsing"));
-          got_picture = 0;
-        }
-      } else {
-        got_picture = 0;
-      }
-    } else {
-      used_bytes = avcodec_decode_video2 (m_pAVCtx, m_pFrame, &got_picture, &avpkt);
-      buflen = 0;
     }
+    else if (used_bytes == pOutLen || ((used_bytes + 9) == pOutLen)) {
+      // Why +9 above?
+      // Well, apparently there are some broken MKV muxers that like to mux the MPEG-2 PICTURE_START_CODE block (which is 9 bytes) in the package with the previous frame
+      // This would cause the frame timestamps to be delayed by one frame exactly, and cause timestamp reordering to go wrong.
+      // So instead of failing on those samples, lets just assume that 9 bytes are that case exactly.
+      m_rtStartCache = rtStartIn = AV_NOPTS_VALUE;
+    }
+    else if (pOutLen > used_bytes) {
+      rtStart = m_rtStartCache;
+      m_rtStartCache = rtStartIn;
+      // The value was used once, don't use it for multiple frames, that ends up in weird timings
+      rtStartIn = AV_NOPTS_VALUE;
+    }
+
+    // decode any parsed data
+    if (pOutLen > 0) {
+      AVPacket *avpkt = av_packet_alloc();
+
+      // set data pointers
+      if (FAILED(FillAVPacketData(avpkt, pOutBuffer, pOutLen, pSample, false)))
+      {
+        return E_OUTOFMEMORY;
+      }
+
+      // timestamp
+      avpkt->pts = rtStart;
+
+      // decode the parsed packet
+      hr = DecodePacket(avpkt, rtStart, rtStop);
+
+      // and free it after
+      av_packet_free(&avpkt);
+
+      if (FAILED(hr)) {
+        return hr;
+      }
+    }
+    // or perform a flush at the end
+    else if (bFlush)
+    {
+      hr = DecodePacket(nullptr, AV_NOPTS_VALUE, AV_NOPTS_VALUE);
+      if (FAILED(hr)) {
+        return hr;
+      }
+      break;
+    }
+  }
+
+  return S_OK;
+}
+
+STDMETHODIMP CDecAvcodec::DecodePacket(AVPacket *avpkt, REFERENCE_TIME rtStartIn, REFERENCE_TIME rtStopIn)
+{
+  int ret = 0;
+  BOOL bEndOfSequence = FALSE;
+  BOOL bDeliverFirst = FALSE;
+  REFERENCE_TIME rtStart = rtStartIn, rtStop = rtStopIn;
+
+  // packet pre-processing
+  if (avpkt) {
+    // EOS/GOP detection for mpeg2 video streams
+    if (m_nCodecId == AV_CODEC_ID_MPEG2VIDEO)
+    {
+      int state = CheckForSequenceMarkers(m_nCodecId, avpkt->data, avpkt->size, &m_MpegParserState);
+      if (state & STATE_EOS_FOUND)
+      {
+        bEndOfSequence = TRUE;
+      }
+
+      if (state & STATE_GOP_FOUND && m_nCodecId == AV_CODEC_ID_MPEG2VIDEO)
+      {
+        m_bWaitingForKeyFrame = FALSE;
+      }
+    }
+
+    // Check for VP8 keyframes
+    if (m_nCodecId == AV_CODEC_ID_VP8 && m_bWaitingForKeyFrame)
+    {
+      if (!(avpkt->data[0] & 1))
+      {
+        DbgLog((LOG_TRACE, 10, L"::Decode(): Found VP8 key-frame, resuming decoding"));
+        m_bWaitingForKeyFrame = FALSE;
+      }
+      else
+      {
+        return S_OK;
+      }
+    }
+
+    // Add a palette from extradata, if any
+    if (m_bHasPalette)
+    {
+      m_bHasPalette = FALSE;
+      uint32_t *pal = (uint32_t *)av_packet_new_side_data(avpkt, AV_PKT_DATA_PALETTE, AVPALETTE_SIZE);
+      int pal_size = FFMIN((1 << m_pAVCtx->bits_per_coded_sample) << 2, m_pAVCtx->extradata_size);
+      uint8_t *pal_src = m_pAVCtx->extradata + m_pAVCtx->extradata_size - pal_size;
+
+      for (int i = 0; i < pal_size / 4; i++)
+        pal[i] = 0xFF << 24 | AV_RL32(pal_src + 4 * i);
+    }
+  }
+
+send_packet:
+  // send packet to the decoder
+  ret = avcodec_send_packet(m_pAVCtx, avpkt);
+  if (ret < 0) {
+    // Check if post-decoding checks failed
+    if (FAILED(PostDecode())) {
+      return E_FAIL;
+    }
+
+    if (ret == AVERROR(EAGAIN))
+    {
+      if (bDeliverFirst)
+      {
+        DbgLog((LOG_ERROR, 10, L"::Decode(): repeated packet submission to the decoder failed"));
+        ASSERT(0);
+        return E_FAIL;
+      }
+      bDeliverFirst = TRUE;
+    }
+    else
+      return S_FALSE;
+  }
+  else
+  {
+    bDeliverFirst = FALSE;
+  }
+
+  // loop over available frames
+  while(1) {
+    ret = avcodec_receive_frame(m_pAVCtx, m_pFrame);
 
     if (FAILED(PostDecode())) {
       av_frame_unref(m_pFrame);
-      av_packet_unref(&avpkt);
       return E_FAIL;
     }
 
     // Decoding of this frame failed ... oh well!
-    if (used_bytes < 0) {
+    if (ret < 0 && ret != AVERROR(EAGAIN)) {
       av_frame_unref(m_pFrame);
-      av_packet_unref(&avpkt);
-      return S_OK;
+      return S_FALSE;
     }
 
     // Judge frame usability
     // This determines if a frame is artifact free and can be delivered.
-    if (m_bResumeAtKeyFrame) {
-      if (m_bWaitingForKeyFrame && got_picture) {
-        if (m_pFrame->key_frame) {
-          DbgLog((LOG_TRACE, 50, L"::Decode() - Found Key-Frame, resuming decoding at %I64d", m_pFrame->pts));
-          m_bWaitingForKeyFrame = FALSE;
-        } else {
-          got_picture = 0;
-        }
+    if (m_bResumeAtKeyFrame && m_bWaitingForKeyFrame && ret >= 0) {
+      if (m_pFrame->key_frame) {
+        DbgLog((LOG_TRACE, 50, L"::Decode() - Found Key-Frame, resuming decoding at %I64d", m_pFrame->pts));
+        m_bWaitingForKeyFrame = FALSE;
+      }
+      else {
+        ret = AVERROR(EAGAIN);
       }
     }
 
@@ -844,15 +993,11 @@ STDMETHODIMP CDecAvcodec::Decode(const BYTE *buffer, int buflen, REFERENCE_TIME 
       m_nBFramePos = !m_nBFramePos;
     }
 
-    if (!got_picture || !m_pFrame->data[0]) {
-      if (!avpkt.size)
-        bFlush = FALSE; // End flushing, no more frames
+    // no frame was decoded, bail out here
+    if (ret < 0 || !m_pFrame->data[0]) {
       av_frame_unref(m_pFrame);
-      av_packet_unref(&avpkt);
-      continue;
+      break;
     }
-
-    av_packet_unref(&avpkt);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // Determine the proper timestamps for the frame, based on different possible flags.
@@ -938,6 +1083,19 @@ STDMETHODIMP CDecAvcodec::Decode(const BYTE *buffer, int buflen, REFERENCE_TIME 
       }
     }
 
+    AVFrameSideData * sdHDRContentLightLevel = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+    if (sdHDRContentLightLevel) {
+      if (sdHDRContentLightLevel->size == sizeof(AVContentLightMetadata)) {
+        AVContentLightMetadata *metadata = (AVContentLightMetadata *)sdHDRContentLightLevel->data;
+        MediaSideDataHDRContentLightLevel * hdr = (MediaSideDataHDRContentLightLevel *)AddLAVFrameSideData(pOutFrame, IID_MediaSideDataHDRContentLightLevel, sizeof(MediaSideDataHDRContentLightLevel));
+        hdr->MaxCLL = metadata->MaxCLL;
+        hdr->MaxFALL = metadata->MaxFALL;
+      }
+      else {
+        DbgLog((LOG_TRACE, 10, L"::Decode(): Found HDR Light Level data of an unexpected size (%d)", sdHDRContentLightLevel->size));
+      }
+    }
+
     if (map.conversion) {
       ConvertPixFmt(m_pFrame, pOutFrame);
     } else {
@@ -970,26 +1128,33 @@ STDMETHODIMP CDecAvcodec::Decode(const BYTE *buffer, int buflen, REFERENCE_TIME 
     if (pOutFrame->format == LAVPixFmt_DXVA2) {
       pOutFrame->data[0] = m_pFrame->data[4];
       HandleDXVA2Frame(pOutFrame);
+    } else if (pOutFrame->format == LAVPixFmt_D3D11) {
+      HandleDXVA2Frame(pOutFrame);
     } else {
       Deliver(pOutFrame);
     }
 
     if (bEndOfSequence) {
       bEndOfSequence = FALSE;
-      if (pOutFrame->format == LAVPixFmt_DXVA2) {
+      if (pOutFrame->format == LAVPixFmt_DXVA2 || pOutFrame->format == LAVPixFmt_D3D11) {
         HandleDXVA2Frame(m_pCallback->GetFlushFrame());
       } else {
         Deliver(m_pCallback->GetFlushFrame());
       }
     }
 
-    if (bFlush) {
+    // increase thread count when flushing
+    if (avpkt == nullptr) {
       m_CurrentThread = (m_CurrentThread + 1) % m_pAVCtx->thread_count;
     }
     av_frame_unref(m_pFrame);
   }
 
-  av_packet_unref(&avpkt);
+  // repeat sending the packet to the decoder if it failed first
+  if (bDeliverFirst) {
+    goto send_packet;
+  }
+
   return S_OK;
 }
 

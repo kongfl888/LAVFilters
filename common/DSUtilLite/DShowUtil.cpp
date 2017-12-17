@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -108,7 +108,7 @@ void DbgCloseLogFile()
 }
 #endif
 
-void split(std::string& text, std::string& separators, std::list<std::string>& words)
+void split(const std::string& text, const std::string& separators, std::list<std::string>& words)
 {
     size_t n = text.length();
     size_t start, stop;
@@ -720,37 +720,24 @@ void CopyMediaSideDataFF(AVPacket *dst, const MediaSideDataFFMpeg **sd)
   *sd = nullptr;
 }
 
-BOOL IsVistaOrNewer()
-{
-  // Query OS version info
-  OSVERSIONINFO os;
-  ZeroMemory(&os, sizeof(os));
-  os.dwOSVersionInfoSize = sizeof(os);
-  GetVersionEx(&os);
-
-  return (os.dwMajorVersion >= 6);
-}
-
 BOOL IsWindows7OrNewer()
 {
-  // Query OS version info
-  OSVERSIONINFO os;
-  ZeroMemory(&os, sizeof(os));
-  os.dwOSVersionInfoSize = sizeof(os);
-  GetVersionEx(&os);
-
-  return (os.dwMajorVersion == 6 && os.dwMinorVersion >= 1) || (os.dwMajorVersion > 6);
+  return (g_osInfo.dwMajorVersion == 6 && g_osInfo.dwMinorVersion >= 1) || (g_osInfo.dwMajorVersion > 6);
 }
 
 BOOL IsWindows8OrNewer()
 {
-  // Query OS version info
-  OSVERSIONINFO os;
-  ZeroMemory(&os, sizeof(os));
-  os.dwOSVersionInfoSize = sizeof(os);
-  GetVersionEx(&os);
+  return (g_osInfo.dwMajorVersion == 6 && g_osInfo.dwMinorVersion >= 2) || (g_osInfo.dwMajorVersion > 6);
+}
 
-  return (os.dwMajorVersion == 6 && os.dwMinorVersion >= 2) || (os.dwMajorVersion > 6);
+BOOL IsWindows10OrNewer()
+{
+  return (g_osInfo.dwMajorVersion >= 10);
+}
+
+BOOL IsWindows10BuildOrNewer(DWORD dwBuild)
+{
+  return (g_osInfo.dwMajorVersion > 10 || (g_osInfo.dwMajorVersion == 10 && g_osInfo.dwBuildNumber >= dwBuild));
 }
 
 void __cdecl debugprintf(LPCWSTR format, ...)

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -44,6 +44,8 @@ public:
   // Remove count bytes from position index
   int RemoveHead(int count);
 
+  bool CopyProperties(const Packet *src);
+
 public:
   DWORD StreamId         = 0;
   BOOL  bDiscontinuity   = FALSE;
@@ -63,6 +65,7 @@ public:
 #define LAV_PACKET_FORCED_SUBTITLE  0x0004
 #define LAV_PACKET_H264_ANNEXB      0x0008
 #define LAV_PACKET_SRT              0x0010
+#define LAV_PACKET_PLANAR_PCM       0x0020
   DWORD dwFlags          = 0;
 
 private:

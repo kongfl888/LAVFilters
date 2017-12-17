@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -38,9 +38,9 @@ public:
   STDMETHODIMP_(BOOL) IsInterlaced(BOOL bAllowGuess) { return TRUE; }
   STDMETHODIMP InitAllocator(IMemAllocator **ppAlloc) { return E_NOTIMPL; }
   STDMETHODIMP PostConnect(IPin *pPin) { return S_FALSE; }
-  STDMETHODIMP_(long) GetBufferCount() { return 2; }
+  STDMETHODIMP BreakConnect() { return S_FALSE; }
+  STDMETHODIMP_(long) GetBufferCount(long *pMaxBuffers = nullptr) { return 2; }
 
-  STDMETHODIMP SyncToProcessThread() { return HasThreadSafeBuffers() == S_OK ? S_FALSE : S_OK; }
   STDMETHODIMP HasThreadSafeBuffers() { return S_FALSE; }
 
   STDMETHODIMP SetDirectOutput(BOOL bDirect) { return S_FALSE; }

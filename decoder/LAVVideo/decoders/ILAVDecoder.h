@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -45,7 +45,7 @@ typedef enum LAVPixelFormat {
   /* packed/half-packed YUV */
   LAVPixFmt_NV12,        ///< YUV 4:2:0, U/V interleaved
   LAVPixFmt_YUY2,        ///< YUV 4:2:2, packed, YUYV order
-  LAVPixFmt_P010,        ///< YUV 4:2:0, 10-bit, U/V interleaved
+  LAVPixFmt_P016,        ///< YUV 4:2:0, 10 to 16-bit, U/V interleaved, MSB aligned
 
   /* RGB */
   LAVPixFmt_RGB24,       ///< RGB24, in BGR order
@@ -54,6 +54,7 @@ typedef enum LAVPixelFormat {
   LAVPixFmt_RGB48,       ///< RGB48, in RGB order (16-bit per pixel)
 
   LAVPixFmt_DXVA2,       ///< DXVA2 Surface
+  LAVPixFmt_D3D11,       ///< D3D11 Surface
 
   LAVPixFmt_NB,          ///< number of formats
 } LAVPixelFormat;
@@ -282,6 +283,11 @@ interface ILAVVideoCallback
    * Get the index of the GPU device to be used for HW decoding, DWORD_MAX if not set
    */
   STDMETHOD_(DWORD, GetGPUDeviceIndex)() PURE;
+
+  /**
+   * Check if the input is using a dynamic allocator
+   */
+  STDMETHOD_(BOOL, HasDynamicInputAllocator)() PURE;
 };
 
 /**
@@ -380,9 +386,14 @@ interface ILAVDecoder
   STDMETHOD(PostConnect)(IPin *pPin) PURE;
 
   /**
+   * Notify the decoder the output connection was broken
+   */
+  STDMETHOD(BreakConnect)() PURE;
+
+  /**
    * Get the number of sample buffers optimal for this decoder
    */
-  STDMETHOD_(long, GetBufferCount)() PURE;
+  STDMETHOD_(long, GetBufferCount)(long *pMaxBuffers = nullptr) PURE;
 
   /**
    * Get the name of the decoder
@@ -393,11 +404,6 @@ interface ILAVDecoder
    * Get whether the decoder outputs thread-safe buffers
    */
   STDMETHOD(HasThreadSafeBuffers)() PURE;
-
-  /**
-   * Get whether the decoder should sync to the main thread
-   */
-  STDMETHOD(SyncToProcessThread)() PURE;
 
   /**
    * Toggle direct frame output mode for hardware decoders
@@ -426,12 +432,13 @@ interface ILAVDecoder
  * They are listed here so that including their header files is not required
  */
 ILAVDecoder *CreateDecoderAVCodec();
-ILAVDecoder *CreateDecoderWMV9();
 ILAVDecoder *CreateDecoderWMV9MFT();
 ILAVDecoder *CreateDecoderCUVID();
 ILAVDecoder *CreateDecoderQuickSync();
 ILAVDecoder *CreateDecoderDXVA2();
 ILAVDecoder *CreateDecoderDXVA2Native();
+ILAVDecoder *CreateDecoderD3D11();
 ILAVDecoder *CreateDecoderMSDKMVC();
 
 HRESULT VerifyD3D9Device(DWORD & dwIndex, DWORD dwDeviceId);
+HRESULT VerifyD3D11Device(DWORD & dwIndex, DWORD dwDeviceId);

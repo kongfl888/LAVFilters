@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -1319,6 +1319,13 @@ STDMETHODIMP CLAVFDemuxer::GetNextPacket(Packet **ppPacket)
         pPacket->dwFlags |= LAV_PACKET_SRT;
       }
     }
+
+    if (stream->codecpar->codec_id == AV_CODEC_ID_PCM_S16BE_PLANAR
+      || stream->codecpar->codec_id == AV_CODEC_ID_PCM_S16LE_PLANAR
+      || stream->codecpar->codec_id == AV_CODEC_ID_PCM_S24LE_PLANAR
+      || stream->codecpar->codec_id == AV_CODEC_ID_PCM_S32LE_PLANAR
+      )
+      pPacket->dwFlags |= LAV_PACKET_PLANAR_PCM;
 
     // Update extradata and send new mediatype, when required
     int sidedata_size = 0;

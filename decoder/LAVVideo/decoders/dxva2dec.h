@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2011-2016 Hendrik Leppkes
+ *      Copyright (C) 2011-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -24,8 +24,8 @@
 
 #define DXVA2_MAX_SURFACES 64
 #define DXVA2_QUEUE_SURFACES 4
-#define DXVA2_SURFACE_BASE_ALIGN 16
 
+typedef HRESULT WINAPI pDirect3DCreate9Ex(UINT, IDirect3D9Ex **);
 typedef HRESULT WINAPI pCreateDeviceManager9(UINT *pResetToken, IDirect3DDeviceManager9 **);
 
 typedef struct {
@@ -51,10 +51,9 @@ public:
 
   STDMETHODIMP InitAllocator(IMemAllocator **ppAlloc);
   STDMETHODIMP PostConnect(IPin *pPin);
-  STDMETHODIMP_(long) GetBufferCount();
+  STDMETHODIMP_(long) GetBufferCount(long *pMaxBuffers = nullptr);
   STDMETHODIMP_(const WCHAR*) GetDecoderName() { return m_bNative ? L"dxva2n" : (m_bDirect ? L"dxva2cb direct" : L"dxva2cb"); }
   STDMETHODIMP HasThreadSafeBuffers() { return m_bNative ? S_FALSE : S_OK; }
-  STDMETHODIMP SyncToProcessThread() { return S_OK; }
   STDMETHODIMP SetDirectOutput(BOOL bDirect) { m_bDirect = bDirect; return S_OK; }
   STDMETHODIMP_(DWORD) GetHWAccelNumDevices();
   STDMETHODIMP GetHWAccelDeviceInfo(DWORD dwIndex, BSTR *pstrDeviceName, DWORD *dwDeviceIdentifier);
@@ -75,14 +74,16 @@ protected:
   bool DeliverDirect(LAVFrame *pFrame);
 
 private:
-  HRESULT InitD3D();
+  HRESULT InitD3D(UINT lAdapter);
+  HRESULT InitD3DEx(UINT lAdapter);
+  HRESULT InitD3DAdapterIdentifier(UINT lAdapter);
   STDMETHODIMP DestroyDecoder(bool bFull, bool bNoAVCodec = false);
   STDMETHODIMP FreeD3DResources();
   STDMETHODIMP LoadDXVA2Functions();
 
   HRESULT CreateD3DDeviceManager(IDirect3DDevice9 *pDevice, UINT *pReset, IDirect3DDeviceManager9 **ppManager);
   HRESULT CreateDXVAVideoService(IDirect3DDeviceManager9 *pManager, IDirectXVideoDecoderService **ppService);
-  HRESULT FindVideoServiceConversion(AVCodecID codec, bool bHighBitdepth, GUID *input, D3DFORMAT *output);
+  HRESULT FindVideoServiceConversion(AVCodecID codec, int profile, GUID *input, D3DFORMAT *output);
   HRESULT FindDecoderConfiguration(const GUID &input, const DXVA2_VideoDesc *pDesc, DXVA2_ConfigPictureDecode *pConfig);
 
   HRESULT CreateDXVA2Decoder(int nSurfaces = 0, IDirect3DSurface9 **ppSurfaces = nullptr);
@@ -101,8 +102,6 @@ private:
   STDMETHODIMP FlushDisplayQueue(BOOL bDeliver);
   STDMETHODIMP FlushFromAllocator();
 
-  DWORD GetAlignedDimension(DWORD dim);
-
 private:
   friend class CDXVA2SurfaceAllocator;
   BOOL m_bNative = FALSE;
@@ -110,6 +109,9 @@ private:
   CDXVA2SurfaceAllocator *m_pDXVA2Allocator = nullptr;
 
   struct {
+    HMODULE d3dlib;
+    pDirect3DCreate9Ex *direct3DCreate9Ex;
+
     HMODULE dxva2lib;
     pCreateDeviceManager9 *createDeviceManager;
   } dx;
@@ -131,8 +133,6 @@ private:
   LPDIRECT3DSURFACE9 m_pRawSurface[DXVA2_MAX_SURFACES];
 
   BOOL m_bFailHWDecode = FALSE;
-
-  DXVA2_ExtendedFormat m_DXVAExtendedFormat;
 
   LAVFrame* m_FrameQueue[DXVA2_QUEUE_SURFACES];
   int       m_FrameQueuePosition = 0;

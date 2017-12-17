@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -63,6 +63,7 @@ struct s_id_map {
 struct s_id_map nice_codec_names[] = {
   // Video
   { AV_CODEC_ID_H264, "h264" }, // XXX: Do not remove, required for custom profile/level formatting
+  { AV_CODEC_ID_HEVC, "hevc" }, // XXX: Do not remove, required for custom profile/level formatting
   { AV_CODEC_ID_VC1, "vc-1" },  // XXX: Do not remove, required for custom profile/level formatting
   { AV_CODEC_ID_MPEG2VIDEO, "mpeg2" },
   // Audio
@@ -120,6 +121,13 @@ std::string get_codec_name(const AVCodecParameters *par)
       sprintf_s(l_buf, "%.1f", par->level / 10.0);
       codec_name << " L" << l_buf;
     }
+  } else if (id == AV_CODEC_ID_HEVC && profile) {
+    codec_name << nice_name << " " << tolower(profile);
+    if (par->level && par->level != FF_LEVEL_UNKNOWN && par->level < 1000) {
+      char l_buf[5];
+      sprintf_s(l_buf, "%.1f", par->level / 30.0);
+      codec_name << " L" << l_buf;
+    }
   } else if (id == AV_CODEC_ID_VC1 && profile) {
     codec_name << nice_name << " " << tolower(profile);
     if (par->level != FF_LEVEL_UNKNOWN) {
@@ -143,9 +151,8 @@ std::string get_codec_name(const AVCodecParameters *par)
       codec_name << " " << tolower(profile);
   } else {
     /* output avi tags */
-    char buf[32];
-    av_get_codec_tag_string(buf, sizeof(buf), par->codec_tag);
-    codec_name << buf;
+    char buf[AV_FOURCC_MAX_STRING_SIZE] = { 0 };
+    codec_name << av_fourcc_make_string(buf, par->codec_tag);
     sprintf_s(buf, "0x%04X", par->codec_tag);
     codec_name  << " / " << buf;
   }

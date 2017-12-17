@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -37,6 +37,7 @@
 #include "registry.h"
 #include "IGraphRebuildDelegate.h"
 #include "IMediaSideDataFFmpeg.h"
+#include "ILAVDynamicAllocator.h"
 
 // The GUID we use to register the splitter media types
 DEFINE_GUID(MEDIATYPE_LAVSplitter,

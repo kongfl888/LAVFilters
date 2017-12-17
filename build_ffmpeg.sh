@@ -57,13 +57,8 @@ configure() (
     --disable-protocol=async,cache,concat,httpproxy,icecast,md5,subfile \
     --disable-muxers                \
     --enable-muxer=spdif            \
-    --disable-hwaccels              \
-    --enable-hwaccel=h264_dxva2     \
-    --enable-hwaccel=hevc_dxva2     \
-    --enable-hwaccel=vc1_dxva2      \
-    --enable-hwaccel=wmv3_dxva2     \
-    --enable-hwaccel=mpeg2_dxva2    \
-    --enable-hwaccel=vp9_dxva2      \
+    --disable-bsfs                  \
+    --enable-bsf=extract_extradata,vp9_superframe \
     --disable-cuda                  \
     --disable-cuvid                 \
     --disable-nvenc                 \
@@ -76,7 +71,6 @@ configure() (
     --disable-postproc              \
     --disable-swresample            \
     --disable-encoders              \
-    --disable-bsfs                  \
     --disable-devices               \
     --disable-programs              \
     --disable-debug                 \
@@ -84,14 +78,14 @@ configure() (
     --build-suffix=-lav             \
     --arch=${arch}"
 
-  EXTRA_CFLAGS="-fno-tree-vectorize -D_WIN32_WINNT=0x0502 -DWINVER=0x0502 -I../thirdparty/include"
+  EXTRA_CFLAGS="-fno-tree-vectorize -D_WIN32_WINNT=0x0600 -DWINVER=0x0600 -I../thirdparty/include"
   EXTRA_LDFLAGS=""
   if [ "${arch}" == "x86_64" ]; then
     OPTIONS="${OPTIONS} --enable-cross-compile --cross-prefix=${cross_prefix} --target-os=mingw32 --pkg-config=pkg-config"
     EXTRA_LDFLAGS="${EXTRA_LDFLAGS} -L../thirdparty/lib64"
   else
     OPTIONS="${OPTIONS} --cpu=i686"
-    EXTRA_CFLAGS="${EXTRA_CFLAGS} -mmmx -msse -mfpmath=sse"
+    EXTRA_CFLAGS="${EXTRA_CFLAGS} -mmmx -msse -msse2 -mfpmath=sse -mstackrealign"
     EXTRA_LDFLAGS="${EXTRA_LDFLAGS} -L../thirdparty/lib32"
   fi
 
@@ -114,11 +108,11 @@ if $clean_build ; then
     clean
 
     ## run configure, redirect to file because of a msys bug
-    configure > config.out 2>&1
+    configure > ffbuild/config.out 2>&1
     CONFIGRETVAL=$?
 
     ## show configure output
-    cat config.out
+    cat ffbuild/config.out
 fi
 
 ## Only if configure succeeded, actually build

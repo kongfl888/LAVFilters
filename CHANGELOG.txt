@@ -1,6 +1,57 @@
 LAV DirectShow Filters Changelog
 ===================================
 
+0.71.0 - 2017/xx/xx
+General
+- LAV Filters now requires Windows Vista or newer, Windows XP is no longer supported
+
+LAV Splitter
+- NEW: Preliminary support for UHD Blu-ray parsing
+
+LAV Video
+- NEW: D3D11 hardware accelerated decoding (native mode with madVR, Copy-Back otherwise)
+- NEW: Support for hardware accelerated H.264 MVC 3D decoding on Intel GPUs
+- Fixed: HDR metadata was not properly communicated to madVR in DXVA2-Native mode
+- Fixed: Anamorphic WMV9/VC-1 videos were not being played back with the correct aspect ratio in all cases
+- Fixed: Changing certain settings while playback was paused could result in a deadlock
+- Fixed: Playing severly corrupted HEVC streams with hardware decoding could result in playback failing entirely, instead of skipping over the corruption
+
+LAV Audio
+- NEW: Basic support for AAC 960 streams (common in DVB radio streams)
+
+0.70.2 - 2017/07/06
+LAV Video
+- Fixed: DXVA2 decoding could fail in 0.70 after a dynamic media type change
+
+0.70.1 - 2017/07/01
+LAV Video
+- NEW: DXVA2-CopyBack uses D3D9Ex to allow headless operation
+- Changed: Increased the maximum number of decode threads to 32
+- Changed: Rebalanced the "Auto" thread strategy to use the exact number of available CPU cores, instead of 1.5x the cores
+- Fixed: Certain H264 streams could crash in 0.70 due to lack of buffer padding
+
+0.70.0 - 2017/06/15
+General
+- Official LAV Filters builds require a SSE2 capable CPU
+
+LAV Splitter
+- Fixed: Certain MP4/MOV files didn't play or seek correctly in recent versions of LAV Splitter
+- Fixed: HEVC in MP4 without PTS timestamp is being signaled appropriately
+- Fixed: Closing RTSP streams did not properly call the TEARDOWN function
+
+LAV Video
+- NEW: CUVID support for VP9 8/10-bit and HEVC 10/12-bit decoding
+- NEW: DXVA2 support for VP9 10-bit decoding
+- Changed: Simplified the internal dataflow to reduce overhead and improve performance
+- Changed: Enabled P010 output to EVR on Windows 10 Creators Update
+- Fixed: Y416 output was incorrect (required by madVR 0.91.8 and newer)
+- Fixed: Parsing H.264 MVC SEI NALs could fail in some cases
+- Fixed: CUVID decoding could deinterlace progressive streams under certain circumstances, degrading the quality
+
+LAV Audio
+- Fixed: LATM AAC streams with Program Config Elements (PCE) (common in DVB-T2 broadcast) played with audible distortions
+- Fixed: Very short PCM audio streams didn't play properly
+
 0.69.0 - 2016/12/11
 LAV Splitter
 - NEW: Support for extracting HDR metadata from YouTube HDR VP9 streams

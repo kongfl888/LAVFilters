@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -162,7 +162,7 @@ int CLAVInputPin::Read(void *opaque, uint8_t *buf, int buf_size)
       DbgLog((LOG_TRACE, 10, L"-> Read %d bytes", read));
     }
     pin->m_llPos += read;
-    return read;
+    return read > 0 ? read : AVERROR_EOF;
   }
   pin->m_llPos += buf_size;
   return buf_size;

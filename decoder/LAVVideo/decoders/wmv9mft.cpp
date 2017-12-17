@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -497,6 +497,7 @@ STDMETHODIMP CDecWMV9MFT::ProcessOutput()
 
   AVRational display_aspect_ratio = {0, 0};
   av_reduce(&display_aspect_ratio.num, &display_aspect_ratio.den, (int64_t)pixel_aspect_ratio.num * pFrame->width, (int64_t)pixel_aspect_ratio.den * pFrame->height, INT_MAX);
+  pFrame->aspect_ratio = display_aspect_ratio;
 
   pFrame->interlaced = MFGetAttributeUINT32(OutputBuffer.pSample, MFSampleExtension_Interlaced,       FALSE);
   pFrame->repeat     = MFGetAttributeUINT32(OutputBuffer.pSample, MFSampleExtension_RepeatFirstField, FALSE);

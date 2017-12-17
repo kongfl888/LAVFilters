@@ -60,13 +60,8 @@ configure() (
     --disable-protocol=async,cache,concat,httpproxy,icecast,md5,subfile \
     --disable-muxers                \
     --enable-muxer=spdif            \
-    --disable-hwaccels              \
-    --enable-hwaccel=h264_dxva2     \
-    --enable-hwaccel=hevc_dxva2     \
-    --enable-hwaccel=vc1_dxva2      \
-    --enable-hwaccel=wmv3_dxva2     \
-    --enable-hwaccel=mpeg2_dxva2    \
-    --enable-hwaccel=vp9_dxva2      \
+    --disable-bsfs                  \
+    --enable-bsf=extract_extradata,vp9_superframe \
     --disable-cuda                  \
     --disable-cuvid                 \
     --disable-nvenc                 \
@@ -76,14 +71,13 @@ configure() (
     --disable-postproc              \
     --disable-swresample            \
     --disable-encoders              \
-    --disable-bsfs                  \
     --disable-devices               \
     --disable-programs              \
     --disable-doc                   \
     --build-suffix=-lav             \
     --arch=${arch}"
 
-  EXTRA_CFLAGS="-D_WIN32_WINNT=0x0502 -DWINVER=0x0502 -Zo -GS-"
+  EXTRA_CFLAGS="-D_WIN32_WINNT=0x0600 -DWINVER=0x0600 -Zo -GS-"
   EXTRA_LDFLAGS=""
 
   if $debug ; then
@@ -95,7 +89,7 @@ configure() (
     EXTRA_LDFLAGS="${EXTRA_LDFLAGS} -NODEFAULTLIB:libcmt"
   fi
 
-  sh configure --toolchain=msvc --extra-cflags="${EXTRA_CFLAGS}" --extra-ldflags="${EXTRA_LDFLAGS}" ${OPTIONS}
+  sh configure --toolchain=msvc --x86asmexe=yasm --extra-cflags="${EXTRA_CFLAGS}" --extra-ldflags="${EXTRA_LDFLAGS}" ${OPTIONS}
 )
 
 build() (
@@ -112,11 +106,11 @@ if $clean_build ; then
     clean
 
     ## run configure, redirect to file because of a msys bug
-    configure > config.out 2>&1
+    configure > ffbuild/config.out 2>&1
     CONFIGRETVAL=$?
 
     ## show configure output
-    cat config.out
+    cat ffbuild/config.out
 fi
 
 ## Only if configure succeeded, actually build

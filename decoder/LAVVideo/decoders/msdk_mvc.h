@@ -1,5 +1,5 @@
 /*
-*      Copyright (C) 2010-2016 Hendrik Leppkes
+*      Copyright (C) 2010-2017 Hendrik Leppkes
 *      http://www.1f0.de
 *
 *  This program is free software; you can redistribute it and/or modify
@@ -32,8 +32,10 @@
 #define ASYNC_DEPTH 8
 #define ASYNC_QUEUE_SIZE (ASYNC_DEPTH + 2)
 
-// 1s timestamp offset to avoid negative timestamps
-#define TIMESTAMP_OFFSET 10000000i64
+// 10s timestamp offset to avoid negative timestamps
+#define TIMESTAMP_OFFSET 100000000i64
+
+#define MFX_IMPL_VIA_MASK 0x0F00
 
 typedef struct _MVCBuffer {
   mfxFrameSurface1 surface = { 0 };

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -19,11 +19,11 @@
 
 #pragma once
 
-// Set minimal target OS (XP SP2+)
+// Set minimal target OS (Vista+)
 #ifdef _WIN32_WINNT
 #undef _WIN32_WINNT
 #endif
-#define _WIN32_WINNT 0x0502
+#define _WIN32_WINNT 0x0600
 #ifdef WINVER
 #undef WINVER
 #endif

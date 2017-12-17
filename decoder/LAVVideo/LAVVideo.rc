@@ -131,7 +131,8 @@ BEGIN
     LTEXT           "<none>",IDC_HWACCEL_DEVICE,160,72,105,8
     LTEXT           "Hardware Device to use:",IDC_LBL_HWACCEL_DEVICE_SELECT,157,87,105,8
     COMBOBOX        IDC_HWACCEL_DEVICE_SELECT,160,98,235,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "The selected Hardware Decoder does not support using a specific device.", IDC_LBL_HWACCEL_DEVICE_HINT, 160, 115, 235, 18
+    LTEXT           "The selected Hardware Decoder does not support using a specific device.",IDC_LBL_HWACCEL_DEVICE_HINT,160,115,235,18
+    CONTROL         "Enable CUVID DXVA processing", IDC_HWACCEL_CUVID_DXVA, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 160,125,139,10
     GROUPBOX        "Hardware/GPU Deinterlacing (CUVID/QS only)",IDC_GROUP_HWDEINT,237,143,167,52
     CONTROL         "Enable Adaptive HW Deinterlacing",IDC_HWDEINT_ENABLE,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,244,155,139,10
@@ -154,7 +155,7 @@ FONT 8, "MS Shell Dlg", 400, 0, 0x0
 BEGIN
     LTEXT           "Select which formats LAV Video should decode:",IDC_LBL_FORMATS,8,10,378,10
     CONTROL         "",IDC_CODECS,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,7,20,387,193
-    CONTROL         "Use Microsoft WMV9 DMO decoder for WMV3 and VC-1",IDC_CODECS_MSWMVDMO,
+    CONTROL         "Use Microsoft WMV9 MFT decoder for WMV3 and VC-1",IDC_CODECS_MSWMVDMO,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,230,352,10
     CONTROL         "Enable DVD Video support",IDC_DVD_VIDEO,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,217,313,10
 END

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -180,9 +180,6 @@ HRESULT CLAVAudio::LoadDefaults()
   for(int i = 0; i < SampleFormat_NB; ++i)
     m_settings.bSampleFormats[i] = TRUE;
   m_settings.SampleConvertDither = TRUE;
-
-  if (!IsVistaOrNewer())
-    m_settings.bSampleFormats[SampleFormat_FP32] = FALSE;
 
   m_settings.AudioDelayEnabled = FALSE;
   m_settings.AudioDelay = 0;

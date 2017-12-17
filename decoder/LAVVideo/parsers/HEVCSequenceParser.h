@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -21,6 +21,8 @@
 
 #include "ByteParser.h"
 
+#define HEVC_REXT_PROFILE_MAIN_12 0x98
+
 class CHEVCSequenceParser
 {
 public:
@@ -34,7 +36,10 @@ public:
     int valid;
 
     int profile;
+    int rext_profile;
     int level;
+    int chroma;
+    int bitdepth;
   } sps;
 
 private:

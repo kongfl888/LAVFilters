@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 
 #include <map>
 
-#define AVCODEC_MAX_THREADS 16
+#define AVCODEC_MAX_THREADS 32
 
 typedef struct {
   REFERENCE_TIME rtStart;
@@ -46,7 +46,6 @@ public:
   STDMETHODIMP_(BOOL) IsInterlaced(BOOL bAllowGuess);
   STDMETHODIMP_(const WCHAR*) GetDecoderName() { return L"avcodec"; }
   STDMETHODIMP HasThreadSafeBuffers() { return S_OK; }
-  STDMETHODIMP SyncToProcessThread() { return m_pAVCtx && m_pAVCtx->active_thread_type ? S_OK : S_FALSE; }
 
   // CDecBase
   STDMETHODIMP Init();
@@ -56,6 +55,10 @@ protected:
   virtual HRESULT PostDecode() { return S_FALSE; }
   virtual HRESULT HandleDXVA2Frame(LAVFrame *pFrame) { return S_FALSE; }
   STDMETHODIMP DestroyDecoder();
+
+  STDMETHODIMP FillAVPacketData(AVPacket *avpkt, const BYTE *buffer, int buflen, IMediaSample *pSample, bool bRefCounting);
+  STDMETHODIMP DecodePacket(AVPacket *avpkt, REFERENCE_TIME rtStartIn, REFERENCE_TIME rtStopIn);
+  STDMETHODIMP ParsePacket(const BYTE *buffer, int buflen, REFERENCE_TIME rtStart, REFERENCE_TIME rtStop, IMediaSample *pSample);
 
 private:
   STDMETHODIMP ConvertPixFmt(AVFrame *pFrame, LAVFrame *pOutFrame);
@@ -71,9 +74,7 @@ private:
   AVCodecParserContext *m_pParser    = nullptr;
 
   BYTE                 *m_pFFBuffer     = nullptr;
-  int                  m_nFFBufferSize  = 0;
-  BYTE                 *m_pFFBuffer2    = nullptr;
-  int                  m_nFFBufferSize2 = 0;
+  unsigned int         m_nFFBufferSize  = 0;
 
   SwsContext           *m_pSwsContext   = nullptr;
 
@@ -97,4 +98,6 @@ private:
   BOOL                 m_bWaitingForKeyFrame  = FALSE;
   int                  m_iInterlaced          = -1;
   int                  m_nSoftTelecine        = 0;
+
+  int                  m_nx264build           = -1;
 };

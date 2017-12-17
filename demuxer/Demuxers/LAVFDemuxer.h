@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -153,8 +153,8 @@ private:
   void CleanupAVFormat();
   void UpdateParserFlags(AVStream *st);
 
-  REFERENCE_TIME ConvertTimestampToRT(int64_t pts, int den, int num, int64_t starttime = (int64_t)AV_NOPTS_VALUE) const;
-  int64_t ConvertRTToTimestamp(REFERENCE_TIME timestamp, int den, int num, int64_t starttime = (int64_t)AV_NOPTS_VALUE) const;
+  REFERENCE_TIME ConvertTimestampToRT(int64_t pts, int num, int den, int64_t starttime = (int64_t)AV_NOPTS_VALUE) const;
+  int64_t ConvertRTToTimestamp(REFERENCE_TIME timestamp, int num, int den, int64_t starttime = (int64_t)AV_NOPTS_VALUE) const;
 
   int GetStreamIdxFromTotalIdx(size_t index) const;
   const CBaseDemuxer::stream* GetStreamFromTotalIdx(size_t index) const;

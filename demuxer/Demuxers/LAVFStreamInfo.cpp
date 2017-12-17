@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -57,7 +57,8 @@ CLAVFStreamInfo::~CLAVFStreamInfo()
 
 STDMETHODIMP CLAVFStreamInfo::CreateAudioMediaType(AVFormatContext *avctx, AVStream *avstream)
 {
-  if (avstream->codecpar->codec_tag == 0) {
+  // if no codec tag is set, or the tag is set to PCM (which is often wrong), lookup a new tag
+  if (avstream->codecpar->codec_tag == 0 || avstream->codecpar->codec_tag == 1) {
     avstream->codecpar->codec_tag = av_codec_get_tag(mp_wav_taglists, avstream->codecpar->codec_id);
   }
 
@@ -69,7 +70,14 @@ STDMETHODIMP CLAVFStreamInfo::CreateAudioMediaType(AVFormatContext *avctx, AVStr
       return E_FAIL;
   }
 
-  CMediaType mtype = g_AudioHelper.initAudioType(avstream->codecpar->codec_id, avstream->codecpar->codec_tag, m_containerFormat);
+  // use the variant bitrate for the stream if only one stream is available (applies to some radio streams)
+  if (avstream->codecpar->bit_rate == 0 && avctx->nb_streams == 1) {
+    AVDictionaryEntry *dict = av_dict_get(avstream->metadata, "variant_bitrate", nullptr, 0);
+    if (dict && dict->value)
+      avstream->codecpar->bit_rate = atoi(dict->value);
+  }
+
+  CMediaType mtype = g_AudioHelper.initAudioType(avstream->codecpar, avstream->codecpar->codec_tag, m_containerFormat);
 
   if(mtype.formattype == FORMAT_WaveFormatEx) {
     // Special Logic for the MPEG1 Audio Formats (MP1, MP2)
@@ -199,6 +207,35 @@ static bool hevc_is_annexb(std::string format, AVStream *avstream)
   return true;
 }
 
+static int get_vpcC_chroma(AVCodecParameters *codecpar)
+{
+  int chroma_w = 0, chroma_h = 0;
+  if (av_pix_fmt_get_chroma_sub_sample((AVPixelFormat)codecpar->format, &chroma_w, &chroma_h) == 0) {
+    if (chroma_w == 1 && chroma_h == 1) {
+      return (codecpar->chroma_location == AVCHROMA_LOC_LEFT)
+        ? 0
+        : 1;
+    }
+    else if (chroma_w == 1 && chroma_h == 0) {
+      return 2;
+    }
+    else if (chroma_w == 0 && chroma_h == 0) {
+      return 3;
+    }
+  }
+  return 0;
+}
+
+static int get_pixel_bitdepth(AVPixelFormat pix_fmt)
+{
+  const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
+  if (desc == NULL) {
+    DbgLog((LOG_TRACE, 10, "Unknown pixel format"));
+    return 8;
+  }
+  return desc->comp[0].depth;
+}
+
 STDMETHODIMP CLAVFStreamInfo::CreateVideoMediaType(AVFormatContext *avctx, AVStream *avstream)
 {
   unsigned int origCodecTag = avstream->codecpar->codec_tag;
@@ -260,6 +297,24 @@ STDMETHODIMP CLAVFStreamInfo::CreateVideoMediaType(AVFormatContext *avctx, AVStr
       mtype.subtype = MEDIASUBTYPE_WVC1;
       VIDEOINFOHEADER2 *vih2 = (VIDEOINFOHEADER2 *)mtype.pbFormat;
       vih2->bmiHeader.biCompression = mtype.subtype.Data1;
+    }
+    else if (mtype.subtype == MEDIASUBTYPE_VP90) {
+      // generate extradata for VP9 streams
+      mtype.ReallocFormatBuffer(sizeof(VIDEOINFOHEADER2) + 16);
+      VIDEOINFOHEADER2 *vih2 = (VIDEOINFOHEADER2 *)mtype.pbFormat;
+      vih2->bmiHeader.biSize = sizeof(BITMAPINFOHEADER) + 16;
+
+      BYTE *extra = mtype.pbFormat + sizeof(VIDEOINFOHEADER2);
+      AV_WB32(extra, MKBETAG('v', 'p', 'c', 'C'));
+      AV_WB8 (extra +  4, 1); // version
+      AV_WB24(extra +  5, 0); // flags
+      AV_WB8 (extra +  8, avstream->codecpar->profile);
+      AV_WB8 (extra +  9, avstream->codecpar->level == FF_LEVEL_UNKNOWN ? 0 : avstream->codecpar->level);
+      AV_WB8 (extra + 10, get_pixel_bitdepth((AVPixelFormat)avstream->codecpar->format) << 4 | get_vpcC_chroma(avstream->codecpar) << 1 | (avstream->codecpar->color_range == AVCOL_RANGE_JPEG));
+      AV_WB8 (extra + 11, avstream->codecpar->color_primaries);
+      AV_WB8 (extra + 12, avstream->codecpar->color_trc);
+      AV_WB8 (extra + 13, avstream->codecpar->color_space);
+      AV_WB16(extra + 14, 0); // no codec init data
     }
   } else if (mtype.formattype == FORMAT_MPEGVideo) {
     mtype.pbFormat = (BYTE *)g_VideoHelper.CreateMPEG1VI(avstream, &mtype.cbFormat, m_containerFormat);

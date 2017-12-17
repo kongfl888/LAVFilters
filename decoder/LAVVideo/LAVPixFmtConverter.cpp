@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -79,7 +79,8 @@ static LAV_INOUT_PIXFMT_MAP lav_pixfmt_map[] = {
   // 4:2:0
   { LAVPixFmt_YUV420, 8,    { PIXOUT_420_8, PIXOUT_420_10, PIXOUT_420_16, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
   { LAVPixFmt_NV12,   8,    { PIXOUT_420_8, PIXOUT_420_10, PIXOUT_420_16, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
-  { LAVPixFmt_P010,   10,   { PIXOUT_420_10, PIXOUT_420_16, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
+  { LAVPixFmt_P016,   10,   { PIXOUT_420_10, PIXOUT_420_16, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
+  { LAVPixFmt_P016,   16,   { PIXOUT_420_16, PIXOUT_420_10, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
 
   { LAVPixFmt_YUV420bX, 10, { PIXOUT_420_10, PIXOUT_420_16, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
   { LAVPixFmt_YUV420bX, 16, { PIXOUT_420_16, PIXOUT_420_10, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
@@ -105,6 +106,10 @@ static LAV_INOUT_PIXFMT_MAP lav_pixfmt_map[] = {
   { LAVPixFmt_DXVA2,  8,    { PIXOUT_420_8, PIXOUT_420_10, PIXOUT_420_16, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8, PIXOUT_RGB_16 } },
   { LAVPixFmt_DXVA2, 10,    { PIXOUT_420_10, PIXOUT_420_16, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
   { LAVPixFmt_DXVA2, 16,    { PIXOUT_420_16, PIXOUT_420_10, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
+
+  { LAVPixFmt_D3D11,  8,    { PIXOUT_420_8, PIXOUT_420_10, PIXOUT_420_16, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8, PIXOUT_RGB_16 } },
+  { LAVPixFmt_D3D11, 10,    { PIXOUT_420_10, PIXOUT_420_16, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
+  { LAVPixFmt_D3D11, 16,    { PIXOUT_420_16, PIXOUT_420_10, PIXOUT_420_8, PIXOUT_422_16, PIXOUT_422_10, PIXOUT_422_8, PIXOUT_RGB_8, PIXOUT_RGB_16, PIXOUT_444_16, PIXOUT_444_10, PIXOUT_444_8 } },
 };
 
 LAVOutPixFmtDesc lav_pixfmt_desc[] = {
@@ -168,14 +173,14 @@ LAVOutPixFmts CLAVPixFmtConverter::GetOutputBySubtype(const GUID *guid)
 
 static bool IsDXVAPixFmt(LAVPixelFormat inputFormat, LAVOutPixFmts outputFormat, int bpp)
 {
-  if (inputFormat != LAVPixFmt_DXVA2)
+  if (inputFormat != LAVPixFmt_DXVA2 && inputFormat != LAVPixFmt_D3D11)
     return false;
 
   if (bpp == 8 && outputFormat == LAVOutPixFmt_NV12)
     return true;
   else if (bpp == 10 && outputFormat == LAVOutPixFmt_P010)
     return true;
-  else if (bpp == 16 && outputFormat == LAVOutPixFmt_P016)
+  else if (bpp == 12 && outputFormat == LAVOutPixFmt_P016)
     return true;
 
   return false;
@@ -339,7 +344,7 @@ void CLAVPixFmtConverter::SelectConvertFunction()
   } else if ((m_OutputPixFmt == LAVOutPixFmt_RGB32 && (m_InputPixFmt == LAVPixFmt_RGB32 || m_InputPixFmt == LAVPixFmt_ARGB32))
     || (m_OutputPixFmt == LAVOutPixFmt_RGB24 && m_InputPixFmt == LAVPixFmt_RGB24) || (m_OutputPixFmt == LAVOutPixFmt_RGB48 && m_InputPixFmt == LAVPixFmt_RGB48)
     || (m_OutputPixFmt == LAVOutPixFmt_NV12 && m_InputPixFmt == LAVPixFmt_NV12)
-    || ((m_OutputPixFmt == LAVOutPixFmt_P010 || m_OutputPixFmt == LAVOutPixFmt_P016) && m_InputPixFmt == LAVPixFmt_P010)) {
+    || ((m_OutputPixFmt == LAVOutPixFmt_P010 || m_OutputPixFmt == LAVOutPixFmt_P016) && m_InputPixFmt == LAVPixFmt_P016)) {
     if (cpu & AV_CPU_FLAG_SSE2)
       convert = &CLAVPixFmtConverter::plane_copy_sse2;
     else
@@ -379,7 +384,7 @@ void CLAVPixFmtConverter::SelectConvertFunction()
             && (m_InputPixFmt == LAVPixFmt_YUV420 || m_InputPixFmt == LAVPixFmt_YUV420bX
              || m_InputPixFmt == LAVPixFmt_YUV422 || m_InputPixFmt == LAVPixFmt_YUV422bX
              || m_InputPixFmt == LAVPixFmt_YUV444 || m_InputPixFmt == LAVPixFmt_YUV444bX
-             || m_InputPixFmt == LAVPixFmt_NV12   || m_InputPixFmt == LAVPixFmt_P010)) {
+             || m_InputPixFmt == LAVPixFmt_NV12   || m_InputPixFmt == LAVPixFmt_P016)) {
       convert = &CLAVPixFmtConverter::convert_yuv_rgb;
       if (m_OutputPixFmt == LAVOutPixFmt_RGB32) {
         m_RequiredAlignment = 4;
@@ -413,7 +418,7 @@ void CLAVPixFmtConverter::SelectConvertFunction()
         convert = &CLAVPixFmtConverter::convert_rgb48_rgb<1>;
       else
         convert = &CLAVPixFmtConverter::convert_rgb48_rgb<0>;
-    } else if (m_InputPixFmt == LAVPixFmt_P010 && m_OutputPixFmt == LAVOutPixFmt_NV12) {
+    } else if (m_InputPixFmt == LAVPixFmt_P016 && m_OutputPixFmt == LAVOutPixFmt_NV12) {
       convert = &CLAVPixFmtConverter::convert_p010_nv12_sse2;
     }
   }
@@ -432,14 +437,14 @@ void CLAVPixFmtConverter::SelectConvertFunctionDirect()
 
   int cpu = av_get_cpu_flags();
   if ((m_InputPixFmt == LAVPixFmt_NV12 && m_OutputPixFmt == LAVOutPixFmt_NV12)
-   || (m_InputPixFmt == LAVPixFmt_P010 && (m_OutputPixFmt == LAVOutPixFmt_P010 || m_OutputPixFmt == LAVOutPixFmt_P016))) {
+   || (m_InputPixFmt == LAVPixFmt_P016 && (m_OutputPixFmt == LAVOutPixFmt_P010 || m_OutputPixFmt == LAVOutPixFmt_P016))) {
     if (cpu & AV_CPU_FLAG_SSE4)
       convert_direct = &CLAVPixFmtConverter::plane_copy_direct_sse4;
     else if (cpu & AV_CPU_FLAG_SSE2)
       convert_direct = &CLAVPixFmtConverter::plane_copy_sse2;
     else
       convert_direct = &CLAVPixFmtConverter::plane_copy;
-  } else if (m_InputPixFmt == LAVPixFmt_P010 && m_OutputPixFmt == LAVOutPixFmt_NV12) {
+  } else if (m_InputPixFmt == LAVPixFmt_P016 && m_OutputPixFmt == LAVOutPixFmt_NV12) {
     if (cpu & AV_CPU_FLAG_SSE4)
       convert_direct = &CLAVPixFmtConverter::convert_p010_nv12_direct_sse4;
     else if (cpu & AV_CPU_FLAG_SSE2)

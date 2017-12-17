@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 #pragma once
 
 #include "decoders/ILAVDecoder.h"
-#include "DecodeThread.h"
+#include "DecodeManager.h"
 #include "ILAVPinInfo.h"
 
 #include "LAVPixFmtConverter.h"
@@ -143,6 +143,8 @@ public:
   STDMETHODIMP GetHWAccelActiveDevice(BSTR *pstrDeviceName);
 
   // CTransformFilter
+  STDMETHODIMP Stop();
+
   HRESULT CheckInputType(const CMediaType* mtIn);
   HRESULT CheckTransform(const CMediaType* mtIn, const CMediaType* mtOut);
   HRESULT DecideBufferSize(IMemAllocator * pAllocator, ALLOCATOR_PROPERTIES *pprop);
@@ -181,6 +183,7 @@ public:
   STDMETHODIMP_(LAVFrame*) GetFlushFrame();
   STDMETHODIMP ReleaseAllDXVAResources() { ReleaseLastSequenceFrame(); return S_OK; }
   STDMETHODIMP_(DWORD) GetGPUDeviceIndex() { return m_dwGPUDeviceIndex; }
+  STDMETHODIMP_(BOOL) HasDynamicInputAllocator();
 
   // IPropertyBag
   STDMETHODIMP Read(LPCOLESTR pszPropName, VARIANT *pVar, IErrorLog *pErrorLog);
@@ -227,11 +230,11 @@ private:
 
 private:
   friend class CVideoOutputPin;
-  friend class CDecodeThread;
+  friend class CDecodeManager;
   friend class CLAVSubtitleProvider;
   friend class CLAVSubtitleConsumer;
 
-  CDecodeThread        m_Decoder;
+  CDecodeManager       m_Decoder;
 
   REFERENCE_TIME       m_rtPrevStart = 0;
   REFERENCE_TIME       m_rtPrevStop  = 0;
@@ -240,6 +243,7 @@ private:
   BOOL                 m_bForceInputAR  = FALSE;
   BOOL                 m_bSendMediaType = FALSE;
   BOOL                 m_bFlushing      = FALSE;
+  BOOL                 m_bFlushed       = FALSE;
   BOOL                 m_bForceFormatNegotiation = FALSE;
 
   HRESULT              m_hrDeliver      = S_OK;
@@ -268,6 +272,7 @@ private:
 
   struct {
     AVMasteringDisplayMetadata Mastering;
+    AVContentLightMetadata ContentLight;
   } m_SideData;
 
   CLAVVideoSubtitleInputPin *m_pSubtitleInput  = nullptr;
@@ -289,6 +294,7 @@ private:
     DWORD HWAccel;
     BOOL bHWFormats[HWCodec_NB];
     DWORD HWAccelResFlags;
+    BOOL  HWAccelCUVIDXVA;
     DWORD HWDeintMode;
     DWORD HWDeintOutput;
     DWORD DeintFieldOrder;
@@ -299,6 +305,8 @@ private:
     BOOL bDVDVideo;
     DWORD HWAccelDeviceDXVA2;
     DWORD HWAccelDeviceDXVA2Desc;
+    DWORD HWAccelDeviceD3D11;
+    DWORD HWAccelDeviceD3D11Desc;
     BOOL bH264MVCOverride;
   } m_settings;
 

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -51,6 +51,7 @@ static struct {
   { AV_CODEC_ID_H264,       cudaVideoCodec_H264  },
   { AV_CODEC_ID_MPEG4,      cudaVideoCodec_MPEG4 },
   { AV_CODEC_ID_HEVC,       cudaVideoCodec_HEVC  },
+  { AV_CODEC_ID_VP9,        cudaVideoCodec_VP9   },
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -113,6 +114,7 @@ CDecCuvid::CDecCuvid(void)
   ZeroMemory(&cuda, sizeof(cuda));
   ZeroMemory(&m_VideoFormat, sizeof(m_VideoFormat));
   ZeroMemory(&m_DXVAExtendedFormat, sizeof(m_DXVAExtendedFormat));
+  ZeroMemory(&m_VideoDecoderInfo, sizeof(m_VideoDecoderInfo));
 }
 
 CDecCuvid::~CDecCuvid(void)
@@ -136,11 +138,6 @@ STDMETHODIMP CDecCuvid::DestroyDecoder(bool bFull)
   if (m_hParser) {
     cuda.cuvidDestroyVideoParser(m_hParser);
     m_hParser = 0;
-  }
-
-  if (m_hStream) {
-    cuda.cuStreamDestroy(m_hStream);
-    m_hStream = 0;
   }
 
   if (m_pbRawNV12) {
@@ -220,10 +217,6 @@ STDMETHODIMP CDecCuvid::LoadCUDAFuncRefs()
   GET_PROC_CUDA_V2(cuMemAllocHost);
   GET_PROC_CUDA(cuMemFreeHost);
   GET_PROC_CUDA_V2(cuMemcpyDtoH);
-  GET_PROC_CUDA_V2(cuMemcpyDtoHAsync);
-  GET_PROC_CUDA(cuStreamCreate);
-  GET_PROC_CUDA_V2(cuStreamDestroy);
-  GET_PROC_CUDA(cuStreamQuery);
   GET_PROC_CUDA(cuDeviceGetCount);
   GET_PROC_CUDA(cuDriverGetVersion);
   GET_PROC_CUDA(cuDeviceGetName);
@@ -314,7 +307,7 @@ static int _ConvertSMVer2CoresDrvApi(int major, int minor)
     }
     index++;
   }
-  printf("MapSMtoCores undefined SMversion %d.%d!\n", major, minor);
+  DbgLog((LOG_ERROR, 10, L"MapSMtoCores undefined SMversion %d.%d!", major, minor));
   return -1;
 }
 
@@ -431,8 +424,10 @@ STDMETHODIMP CDecCuvid::Init()
 select_device:
   hr = InitD3D9(best_device, dwDeviceIndex);
 
-  if (FAILED(hr)) {
-    DbgLog((LOG_TRACE, 10, L"-> No D3D device available, building non-D3D context on device %d", best_device));
+  if (hr != S_OK) {
+    if (FAILED(hr)) {
+      DbgLog((LOG_TRACE, 10, L"-> No D3D device available, building non-D3D context on device %d", best_device));
+    }
     cuStatus = cuda.cuCtxCreate(&m_cudaContext, CU_CTX_SCHED_BLOCKING_SYNC, best_device);
 
     if (cuStatus == CUDA_SUCCESS) {
@@ -477,6 +472,17 @@ STDMETHODIMP CDecCuvid::InitD3D9(int best_device, DWORD requested_device)
   HRESULT hr = S_OK;
   CUresult cuStatus = CUDA_SUCCESS;
   int device = 0;
+
+  if (IsWindows10OrNewer()) {
+    DbgLog((LOG_ERROR, 10, L"-> D3D9 CUVID interop is not supported on Windows 10"));
+    return E_FAIL;
+  }
+
+  // Check if D3D mode is enabled/wanted
+  if (m_pSettings->GetHWAccelDeintHQ() == FALSE) {
+    DbgLog((LOG_ERROR, 10, L"-> HQ mode is turned off, skipping D3D9 init"));
+    return S_FALSE;
+  }
 
   if (!m_pD3D9)
     m_pD3D9 = Direct3DCreate9(D3D_SDK_VERSION);
@@ -666,6 +672,7 @@ STDMETHODIMP CDecCuvid::InitDecoder(AVCodecID codec, const CMediaType *pmt)
     }
   }
 
+  int bitdepth = 8;
   m_bNeedSequenceCheck = FALSE;
   if (m_VideoParserExInfo.format.seqhdr_data_length) {
     if (cudaCodec == cudaVideoCodec_H264) {
@@ -689,7 +696,7 @@ STDMETHODIMP CDecCuvid::InitDecoder(AVCodecID codec, const CMediaType *pmt)
       CVC1HeaderParser vc1Parser(m_VideoParserExInfo.raw_seqhdr_data, m_VideoParserExInfo.format.seqhdr_data_length);
       m_bInterlaced = vc1Parser.hdr.interlaced;
     } else if (cudaCodec == cudaVideoCodec_HEVC) {
-      hr = CheckHEVCSequence(m_VideoParserExInfo.raw_seqhdr_data, m_VideoParserExInfo.format.seqhdr_data_length);
+      hr = CheckHEVCSequence(m_VideoParserExInfo.raw_seqhdr_data, m_VideoParserExInfo.format.seqhdr_data_length, &bitdepth);
       if (FAILED(hr)) {
         return VFW_E_UNSUPPORTED_VIDEO;
       } else if (hr == S_FALSE) {
@@ -707,21 +714,11 @@ STDMETHODIMP CDecCuvid::InitDecoder(AVCodecID codec, const CMediaType *pmt)
     return E_FAIL;
   }
 
-  {
-    cuda.cuvidCtxLock(m_cudaCtxLock, 0);
-    oResult = cuda.cuStreamCreate(&m_hStream, 0);
-    cuda.cuvidCtxUnlock(m_cudaCtxLock, 0);
-    if (oResult != CUDA_SUCCESS) {
-      DbgLog((LOG_ERROR, 10, L"::InitCodec(): Creating stream failed"));
-      return E_FAIL;
-    }
-  }
-
   BITMAPINFOHEADER *bmi = nullptr;
   videoFormatTypeHandler(pmt->Format(), pmt->FormatType(), &bmi);
 
   {
-    hr = CreateCUVIDDecoder(cudaCodec, bmi->biWidth, bmi->biHeight);
+    hr = CreateCUVIDDecoder(cudaCodec, bmi->biWidth, bmi->biHeight, bitdepth, !m_bInterlaced);
     if (FAILED(hr)) {
       DbgLog((LOG_ERROR, 10, L"-> Creating CUVID decoder failed"));
       return hr;
@@ -735,11 +732,11 @@ STDMETHODIMP CDecCuvid::InitDecoder(AVCodecID codec, const CMediaType *pmt)
   return S_OK;
 }
 
-STDMETHODIMP CDecCuvid::CreateCUVIDDecoder(cudaVideoCodec codec, DWORD dwWidth, DWORD dwHeight)
+STDMETHODIMP CDecCuvid::CreateCUVIDDecoder(cudaVideoCodec codec, DWORD dwWidth, DWORD dwHeight, int nBitdepth, bool bProgressiveSequence)
 {
   DbgLog((LOG_TRACE, 10, L"CDecCuvid::CreateCUVIDDecoder(): Creating CUVID decoder instance"));
   HRESULT hr = S_OK;
-  BOOL bDXVAMode = (m_pD3DDevice9 && IsVistaOrNewer());
+  BOOL bDXVAMode = (m_pD3DDevice9 != nullptr);
 
   cuda.cuvidCtxLock(m_cudaCtxLock, 0);
   CUVIDDECODECREATEINFO *dci = &m_VideoDecoderInfo;
@@ -754,9 +751,10 @@ retry:
   dci->ulHeight            = dwHeight;
   dci->ulNumDecodeSurfaces = MAX_DECODE_FRAMES;
   dci->CodecType           = codec;
+  dci->bitDepthMinus8      = nBitdepth - 8;
   dci->ChromaFormat        = cudaVideoChromaFormat_420;
-  dci->OutputFormat        = cudaVideoSurfaceFormat_NV12;
-  dci->DeinterlaceMode     = (cudaVideoDeinterlaceMode)m_pSettings->GetHWAccelDeintMode();
+  dci->OutputFormat        = nBitdepth > 8 ? cudaVideoSurfaceFormat_P016 : cudaVideoSurfaceFormat_NV12;
+  dci->DeinterlaceMode     = (bProgressiveSequence || (m_pSettings->GetDeinterlacingMode() == DeintMode_Disable)) ? cudaVideoDeinterlaceMode_Weave : (cudaVideoDeinterlaceMode)m_pSettings->GetHWAccelDeintMode();
   dci->ulNumOutputSurfaces = 1;
 
   dci->ulTargetWidth       = dwWidth;
@@ -817,18 +815,26 @@ int CUDAAPI CDecCuvid::HandleVideoSequence(void *obj, CUVIDEOFORMAT *cuvidfmt)
 
   CUVIDDECODECREATEINFO *dci = &filter->m_VideoDecoderInfo;
 
+  // Check if we should be deinterlacing
+  bool bShouldDeinterlace = (!cuvidfmt->progressive_sequence && filter->m_pSettings->GetDeinterlacingMode() != DeintMode_Disable && filter->m_pSettings->GetHWAccelDeintMode() != HWDeintMode_Weave);
+
+  // Re-initialize the decoder if needed
   if ((cuvidfmt->codec != dci->CodecType)
     || (cuvidfmt->coded_width != dci->ulWidth)
     || (cuvidfmt->coded_height != dci->ulHeight)
     || (cuvidfmt->chroma_format != dci->ChromaFormat)
+    || (cuvidfmt->bit_depth_luma_minus8 != dci->bitDepthMinus8)
+    || (bShouldDeinterlace != (dci->DeinterlaceMode != cudaVideoDeinterlaceMode_Weave))
     || filter->m_bForceSequenceUpdate)
   {
     filter->m_bForceSequenceUpdate = FALSE;
-    filter->CreateCUVIDDecoder(cuvidfmt->codec, cuvidfmt->coded_width, cuvidfmt->coded_height);
+    HRESULT hr = filter->CreateCUVIDDecoder(cuvidfmt->codec, cuvidfmt->coded_width, cuvidfmt->coded_height, cuvidfmt->bit_depth_luma_minus8 + 8, cuvidfmt->progressive_sequence != 0);
+    if (FAILED(hr))
+      filter->m_bFormatIncompatible = TRUE;
   }
 
   filter->m_bInterlaced = !cuvidfmt->progressive_sequence;
-  filter->m_bDoubleRateDeint = filter->m_bInterlaced && (filter->m_pSettings->GetHWAccelDeintOutput() == DeintOutput_FramePerField) && (filter->m_VideoDecoderInfo.DeinterlaceMode != cudaVideoDeinterlaceMode_Weave) && !(filter->m_pSettings->GetDeinterlacingMode() == DeintMode_Disable);
+  filter->m_bDoubleRateDeint = bShouldDeinterlace && (filter->m_pSettings->GetHWAccelDeintOutput() == DeintOutput_FramePerField);
   if (filter->m_bInterlaced && cuvidfmt->frame_rate.numerator && cuvidfmt->frame_rate.denominator) {
     double dFrameTime = 10000000.0 / ((double)cuvidfmt->frame_rate.numerator / cuvidfmt->frame_rate.denominator);
     if (filter->m_bDoubleRateDeint && (int)(dFrameTime / 10000.0) == 41) {
@@ -853,7 +859,7 @@ int CUDAAPI CDecCuvid::HandleVideoSequence(void *obj, CUVIDEOFORMAT *cuvidfmt)
     filter->m_bFormatIncompatible = TRUE;
   }
 
-  fillDXVAExtFormat(filter->m_DXVAExtendedFormat, filter->m_iFullRange, cuvidfmt->video_signal_description.color_primaries, cuvidfmt->video_signal_description.matrix_coefficients, cuvidfmt->video_signal_description.transfer_characteristics);
+  fillDXVAExtFormat(filter->m_DXVAExtendedFormat, (filter->m_iFullRange > 0 || cuvidfmt->video_signal_description.video_full_range_flag), cuvidfmt->video_signal_description.color_primaries, cuvidfmt->video_signal_description.matrix_coefficients, cuvidfmt->video_signal_description.transfer_characteristics);
 
   return TRUE;
 }
@@ -1018,22 +1024,11 @@ STDMETHODIMP CDecCuvid::Deliver(CUVIDPARSERDISPINFO *cuviddisp, int field)
   }
   // Copy memory from the device into the staging area
   if (m_pbRawNV12) {
-#if USE_ASYNC_COPY
-    cuStatus = cuda.cuMemcpyDtoHAsync(m_pbRawNV12, devPtr, size, m_hStream);
-    if (cuStatus != CUDA_SUCCESS) {
-      DbgLog((LOG_ERROR, 10, L"Async Memory Transfer failed (%d)", cuStatus));
-      goto cuda_fail;
-    }
-    while (CUDA_ERROR_NOT_READY == cuda.cuStreamQuery(m_hStream)) {
-      Sleep(1);
-    }
-#else
     cuStatus = cuda.cuMemcpyDtoH(m_pbRawNV12, devPtr, size);
     if (cuStatus != CUDA_SUCCESS) {
       DbgLog((LOG_ERROR, 10, L"Memory Transfer failed (%d)", cuStatus));
       goto cuda_fail;
     }
-#endif
   } else {
     // If we don't have our memory, this is bad.
     DbgLog((LOG_ERROR, 10, L"No Valid Staging Memory - failing"));
@@ -1076,7 +1071,8 @@ STDMETHODIMP CDecCuvid::Deliver(CUVIDPARSERDISPINFO *cuviddisp, int field)
       rtStop = AV_NOPTS_VALUE;
   }
 
-  pFrame->format = LAVPixFmt_NV12;
+  pFrame->format = (m_VideoDecoderInfo.OutputFormat == cudaVideoSurfaceFormat_P016) ? LAVPixFmt_P016 : LAVPixFmt_NV12;
+  pFrame->bpp = m_VideoDecoderInfo.bitDepthMinus8 + 8;
   pFrame->width  = m_VideoFormat.display_area.right;
   pFrame->height = m_VideoFormat.display_area.bottom;
   pFrame->rtStart = rtStart;
@@ -1136,17 +1132,19 @@ STDMETHODIMP CDecCuvid::CheckH264Sequence(const BYTE *buffer, int buflen)
   return S_FALSE;
 }
 
-STDMETHODIMP CDecCuvid::CheckHEVCSequence(const BYTE *buffer, int buflen)
+STDMETHODIMP CDecCuvid::CheckHEVCSequence(const BYTE *buffer, int buflen, int *bitdepth)
 {
   DbgLog((LOG_TRACE, 10, L"CDecCuvid::CheckHEVCSequence(): Checking HEVC frame for SPS"));
   CHEVCSequenceParser hevcParser;
   hevcParser.ParseNALs(buffer, buflen, 0);
   if (hevcParser.sps.valid) {
     DbgLog((LOG_TRACE, 10, L"-> SPS found"));
-    if (hevcParser.sps.profile > FF_PROFILE_HEVC_MAIN) {
+    if (hevcParser.sps.chroma > 1 || hevcParser.sps.bitdepth > 12 || !(hevcParser.sps.profile <= FF_PROFILE_HEVC_MAIN_10 || (hevcParser.sps.profile == FF_PROFILE_HEVC_REXT && hevcParser.sps.rext_profile == HEVC_REXT_PROFILE_MAIN_12))) {
       DbgLog((LOG_TRACE, 10, L"  -> SPS indicates video incompatible with CUVID, aborting (profile: %d)", hevcParser.sps.profile));
       return E_FAIL;
     }
+    if (bitdepth)
+      *bitdepth = hevcParser.sps.bitdepth;
     DbgLog((LOG_TRACE, 10, L"-> Video seems compatible with CUVID"));
     return S_OK;
   }
@@ -1196,7 +1194,7 @@ STDMETHODIMP CDecCuvid::Decode(const BYTE *buffer, int buflen, REFERENCE_TIME rt
     if (m_VideoDecoderInfo.CodecType == cudaVideoCodec_H264) {
       hr = CheckH264Sequence(pCuvidPacket.payload, pCuvidPacket.payload_size);
     } else if (m_VideoDecoderInfo.CodecType == cudaVideoCodec_HEVC) {
-      hr = CheckHEVCSequence(pCuvidPacket.payload, pCuvidPacket.payload_size);
+      hr = CheckHEVCSequence(pCuvidPacket.payload, pCuvidPacket.payload_size, nullptr);
     }
     if (FAILED(hr)) {
       m_bFormatIncompatible = TRUE;
@@ -1289,9 +1287,9 @@ STDMETHODIMP CDecCuvid::GetPixelFormat(LAVPixelFormat *pPix, int *pBpp)
 {
   // Output is always NV12
   if (pPix)
-    *pPix = LAVPixFmt_NV12;
+    *pPix = (m_VideoDecoderInfo.OutputFormat == cudaVideoSurfaceFormat_P016) ? LAVPixFmt_P016 : LAVPixFmt_NV12;
   if (pBpp)
-    *pBpp = 8;
+    *pBpp = m_VideoDecoderInfo.bitDepthMinus8 + 8;
   return S_OK;
 }
 

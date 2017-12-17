@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -22,7 +22,6 @@
 
 #define MAX_DECODE_FRAMES 20
 #define DISPLAY_DELAY	4
-#define USE_ASYNC_COPY 1
 #define MAX_PIC_INDEX 64
 
 #include "cuvid/dynlink_cuda.h"
@@ -63,7 +62,7 @@ private:
 
   STDMETHODIMP InitD3D9(int best_device, DWORD requested_device);
 
-  STDMETHODIMP CreateCUVIDDecoder(cudaVideoCodec codec, DWORD dwWidth, DWORD dwHeight);
+  STDMETHODIMP CreateCUVIDDecoder(cudaVideoCodec codec, DWORD dwWidth, DWORD dwHeight, int nBitdepth, bool bProgressiveSequence);
   STDMETHODIMP DecodeSequenceData();
 
   // CUDA Callbacks
@@ -79,7 +78,7 @@ private:
   STDMETHODIMP FlushParser();
 
   STDMETHODIMP CheckH264Sequence(const BYTE *buffer, int buflen);
-  STDMETHODIMP CheckHEVCSequence(const BYTE *buffer, int buflen);
+  STDMETHODIMP CheckHEVCSequence(const BYTE *buffer, int buflen, int *bitdepth);
 
   int GetMaxGflopsGraphicsDeviceId();
 
@@ -95,10 +94,6 @@ private:
     CUMETHOD(cuMemAllocHost);
     CUMETHOD(cuMemFreeHost);
     CUMETHOD(cuMemcpyDtoH);
-    CUMETHOD(cuMemcpyDtoHAsync);
-    CUMETHOD(cuStreamCreate);
-    CUMETHOD(cuStreamDestroy);
-    CUMETHOD(cuStreamQuery);
     CUMETHOD(cuDeviceGetCount);
     CUMETHOD(cuDriverGetVersion);
     CUMETHOD(cuDeviceGetName);
@@ -142,8 +137,6 @@ private:
   int                    m_DisplayPos = 0;
 
   CUVIDPICPARAMS         m_PicParams[MAX_PIC_INDEX];
-
-  CUstream               m_hStream = 0;
 
   BOOL                   m_bVDPAULevelC = FALSE;
   char                   m_cudaDeviceName[256] = { 0 };

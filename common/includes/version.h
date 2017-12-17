@@ -3,8 +3,8 @@
 #include "version_rev.h"
 
 #define LAV_VERSION_MAJOR     0
-#define LAV_VERSION_MINOR    69
-#define LAV_VERSION_REVISION  0
+#define LAV_VERSION_MINOR    70
+#define LAV_VERSION_REVISION  2
 
 /////////////////////////////////////////////////////////
 #ifndef ISPP_INCLUDED

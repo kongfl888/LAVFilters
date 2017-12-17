@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -97,4 +97,21 @@ int Packet::RemoveHead(int count)
   m_Packet->data += count;
   m_Packet->size -= (int)count;
   return 0;
+}
+
+bool Packet::CopyProperties(const Packet *src)
+{
+  StreamId = src->StreamId;
+  bDiscontinuity = src->bDiscontinuity;
+  bSyncPoint = src->bSyncPoint;
+  bPosition = src->bPosition;
+  rtStart = src->rtStart;
+  rtStop = src->rtStop;
+  rtPTS = src->rtPTS;
+  rtDTS = src->rtDTS;
+  if (src->pmt)
+    pmt = CreateMediaType(src->pmt);
+  dwFlags = src->dwFlags;
+
+  return true;
 }

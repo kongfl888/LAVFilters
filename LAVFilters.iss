@@ -33,7 +33,7 @@ OutputBaseFilename        = LAVFilters-{#=LAV_VERSION_STRING}
 OutputDir                 = .
 Compression               = lzma2/ultra64
 SolidCompression          = yes
-MinVersion                = 0,5.1SP3
+MinVersion                = 0,6.0
 PrivilegesRequired        = admin
 CreateAppDir              = yes
 DefaultDirName            = {pf}\LAV Filters
@@ -158,6 +158,15 @@ const
 var
   SplitterPage: TInputOptionWizardPage;
   SplitterFormats: Array [0..NumFormatsMinusOne] of Format;
+
+function IsProcessorFeaturePresent(Feature: Integer): Boolean;
+external 'IsProcessorFeaturePresent@kernel32.dll stdcall';
+
+function Is_SSE2_Supported(): Boolean;
+begin
+  // PF_XMMI64_INSTRUCTIONS_AVAILABLE
+  Result := IsProcessorFeaturePresent(10);
+end;
 
 function SettingsExistCheck(): Boolean;
 begin
@@ -447,9 +456,9 @@ begin
         ExtractTemporaryFile('7za.exe');
         targetPath := ExpandConstant('{tmp}\');
         if IsComponentSelected('lavvideo32') then
-          DoUnzip(targetPath + 'libmfxsw32-v1.7z', ExpandConstant('{app}\x86'));
+          DoUnzip(targetPath + 'libmfxsw32-v2.7z', ExpandConstant('{app}\x86'));
         if IsComponentSelected('lavvideo64') then
-          DoUnzip(targetPath + 'libmfxsw64-v1.7z', ExpandConstant('{app}\x64'));
+          DoUnzip(targetPath + 'libmfxsw64-v2.7z', ExpandConstant('{app}\x64'));
       end;
   end;
 end;
@@ -465,9 +474,9 @@ begin
       if IsComponentSelected('mvc3d') then
       begin
         if IsComponentSelected('lavvideo32') then
-          idpAddFile('http://files.1f0.de/lavf/plugins/libmfxsw32-v1.7z', ExpandConstant('{tmp}\libmfxsw32-v1.7z'));
+          idpAddFile('http://files.1f0.de/lavf/plugins/libmfxsw32-v2.7z', ExpandConstant('{tmp}\libmfxsw32-v2.7z'));
         if IsComponentSelected('lavvideo64') then
-          idpAddFile('http://files.1f0.de/lavf/plugins/libmfxsw64-v1.7z', ExpandConstant('{tmp}\libmfxsw64-v1.7z'));
+          idpAddFile('http://files.1f0.de/lavf/plugins/libmfxsw64-v2.7z', ExpandConstant('{tmp}\libmfxsw64-v2.7z'));
       end;
   end;
 end;
@@ -498,6 +507,11 @@ function InitializeSetup(): Boolean;
 begin
   InitFormats;
   Result := True;
+
+  if not Is_SSE2_Supported() then begin
+    SuppressibleMsgBox('LAV Filters requires a CPU with SSE2 instruction support.'#10'Your CPU does not have these capabilities.', mbCriticalError, MB_OK, MB_OK);
+    Result := False;
+  end;
 end;
 
 function InitializeUninstall(): Boolean;

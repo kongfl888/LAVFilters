@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -148,6 +148,9 @@ HRESULT CLAVVideoSettingsProp::OnApplyChanges()
     dwVal--;
   m_pVideoSettings->SetHWAccelDeviceIndex(m_pVideoSettings->GetHWAccel(), dwVal, 0);
 
+  BOOL bHWAccelCUVIDDXVA = (BOOL)SendDlgItemMessage(m_Dlg, IDC_HWACCEL_CUVID_DXVA, BM_GETCHECK, 0, 0);
+  m_pVideoSettings->SetHWAccelDeintHQ(bHWAccelCUVIDDXVA);
+
   BOOL bHWDeint = (BOOL)SendDlgItemMessage(m_Dlg, IDC_HWDEINT_ENABLE, BM_GETCHECK, 0, 0);
   m_pVideoSettings->SetHWAccelDeintMode(bHWDeint ? HWDeintMode_Hardware : HWDeintMode_Weave);
 
@@ -195,7 +198,7 @@ HRESULT CLAVVideoSettingsProp::OnActivate()
   SendDlgItemMessage(m_Dlg, IDC_THREADS, CB_RESETCONTENT, 0, 0);
   SendDlgItemMessage(m_Dlg, IDC_THREADS, CB_ADDSTRING, 0, (LPARAM)stringBuffer);
 
-  for (unsigned i = 1; i <= 16; ++i) {
+  for (unsigned i = 1; i <= 32; ++i) {
     swprintf_s(stringBuffer, L"%d", i);
     SendDlgItemMessage(m_Dlg, IDC_THREADS, CB_ADDSTRING, 0, (LPARAM)stringBuffer);
   }
@@ -209,11 +212,13 @@ HRESULT CLAVVideoSettingsProp::OnActivate()
   WCHAR hwAccelQuickSync[] = L"Intel\xae QuickSync";
   WCHAR hwAccelDXVA2CB[] = L"DXVA2 (copy-back)";
   WCHAR hwAccelDXVA2N[] = L"DXVA2 (native)";
+  WCHAR hwAccelD3D11[] = L"D3D11";
   SendDlgItemMessage(m_Dlg, IDC_HWACCEL, CB_ADDSTRING, 0, (LPARAM)hwAccelNone);
   SendDlgItemMessage(m_Dlg, IDC_HWACCEL, CB_ADDSTRING, 0, (LPARAM)hwAccelCUDA);
   SendDlgItemMessage(m_Dlg, IDC_HWACCEL, CB_ADDSTRING, 0, (LPARAM)hwAccelQuickSync);
   SendDlgItemMessage(m_Dlg, IDC_HWACCEL, CB_ADDSTRING, 0, (LPARAM)hwAccelDXVA2CB);
   SendDlgItemMessage(m_Dlg, IDC_HWACCEL, CB_ADDSTRING, 0, (LPARAM)hwAccelDXVA2N);
+  SendDlgItemMessage(m_Dlg, IDC_HWACCEL, CB_ADDSTRING, 0, (LPARAM)hwAccelD3D11);
 
   // Init the fieldorder Combo Box
   SendDlgItemMessage(m_Dlg, IDC_DEINT_FIELDORDER, CB_RESETCONTENT, 0, 0);
@@ -246,7 +251,7 @@ HRESULT CLAVVideoSettingsProp::OnActivate()
   SendDlgItemMessage(m_Dlg, IDC_SWDEINT_MODE, CB_ADDSTRING, 0, (LPARAM)swdeintW3FDIFC);
 
   addHint(IDC_HWACCEL_MPEG4, L"EXPERIMENTAL! The MPEG4-ASP decoder is known to be unstable! Use at your own peril!");
-  addHint(IDC_HWACCEL_VP9, L"EXPERIMENTAL! The VP9 HW decoder is still under development and may be unstable!");
+  addHint(IDC_HWACCEL_CUVID_DXVA, L"Enable DXVA video processing for CUVID decoding, enables hybrid decoding and can affect deinterlacing quality.\n\nNote: Using DXVA2-CopyBack is recommended for hybrid decoding instead of using CUVID in DXVA mode.");
 
   addHint(IDC_HWRES_SD, L"Use Hardware Decoding for Standard-definition content (DVD, SDTV)\n\nThis affects all videos with a resolution less than 1024x576 (DVD resolution)");
   addHint(IDC_HWRES_HD, L"Use Hardware Decoding for High-definition content (Blu-ray, HDTV)\n\nAffects all videos above SD resolution, up to Full-HD, 1920x1200");
@@ -304,6 +309,8 @@ HRESULT CLAVVideoSettingsProp::OnActivate()
     SendDlgItemMessage(m_Dlg, IDC_HWRES_HD, BM_SETCHECK, !!(m_HWRes & LAVHWResFlag_HD), 0);
     SendDlgItemMessage(m_Dlg, IDC_HWRES_UHD, BM_SETCHECK, !!(m_HWRes & LAVHWResFlag_UHD), 0);
 
+    SendDlgItemMessage(m_Dlg, IDC_HWACCEL_CUVID_DXVA, BM_SETCHECK, m_HWAccelCUVIDDXVA, 0);
+
     SendDlgItemMessage(m_Dlg, IDC_HWDEINT_ENABLE, BM_SETCHECK, (m_HWDeintAlgo == HWDeintMode_Hardware), 0);
 
     SendDlgItemMessage(m_Dlg, IDC_HWDEINT_OUT_FILM, BM_SETCHECK, (m_HWDeintOutMode == DeintOutput_FramePer2Field), 0);
@@ -348,7 +355,9 @@ HRESULT CLAVVideoSettingsProp::UpdateHWOptions()
   BOOL bCUDAOnly = bEnabled && (hwAccel == HWAccel_CUDA);
   BOOL bDVD = bEnabled && (BOOL)SendDlgItemMessage(m_Dlg, IDC_HWACCEL_MPEG2, BM_GETCHECK, 0, 0);
   BOOL bHEVC = bEnabled && (hwAccel != HWAccel_QuickSync);
-  BOOL bVP9 = bEnabled && (hwAccel == HWAccel_DXVA2CopyBack || hwAccel == HWAccel_DXVA2Native);
+  BOOL bVP9 = bEnabled && (hwAccel != HWAccel_QuickSync);
+
+  ShowWindow(GetDlgItem(m_Dlg, IDC_HWACCEL_CUVID_DXVA), (hwAccel == HWAccel_CUDA && !IsWindows10OrNewer()) ? SW_SHOW : SW_HIDE);
 
   EnableWindow(GetDlgItem(m_Dlg, IDC_HWACCEL_H264), bEnabled);
   EnableWindow(GetDlgItem(m_Dlg, IDC_HWACCEL_VC1), bEnabled);
@@ -374,15 +383,14 @@ HRESULT CLAVVideoSettingsProp::UpdateHWOptions()
 
   SendDlgItemMessage(m_Dlg, IDC_HWACCEL_AVAIL, WM_SETTEXT, 0, (LPARAM)(hwAccel == HWAccel_None ? hwAccelEmpty : dwSupport == 0 ? hwAccelUnavailable : hwAccelAvailable));
 
-  EnableWindow(GetDlgItem(m_Dlg, IDC_LBL_HWACCEL_DEVICE_SELECT), hwAccel == HWAccel_DXVA2CopyBack);
-  EnableWindow(GetDlgItem(m_Dlg, IDC_HWACCEL_DEVICE_SELECT), hwAccel == HWAccel_DXVA2CopyBack);
-
   const WCHAR hwHintNoDeviceChoice[] = L"The selected Hardware Decoder does not support using a specific device.";
   const WCHAR hwHintDXVA2Display[] = L"DXVA2 requires an active display for GPUs to be available.\nNote that GPUs are listed once for each connected display.";
+  const WCHAR hwHintD3D11NotSupported[] = L"D3D11 requires Windows 8 or newer, and is not supported on this OS.";
+  const WCHAR hwHintD3D11DeviceHint[] = L"Selecting a specific device for D3D11 disables Native mode and forces Copy-Back, use Automatic for the best performance.";
 
 
   SendDlgItemMessage(m_Dlg, IDC_HWACCEL_DEVICE_SELECT, CB_RESETCONTENT, 0, 0);
-  SendDlgItemMessage(m_Dlg, IDC_HWACCEL_DEVICE_SELECT, CB_ADDSTRING, 0, (LPARAM)L"Automatic");
+  SendDlgItemMessage(m_Dlg, IDC_HWACCEL_DEVICE_SELECT, CB_ADDSTRING, 0, (hwAccel == HWAccel_D3D11) ? (LPARAM)L"Automatic (Native)" : (LPARAM)L"Automatic");
 
   DWORD dwnDevices = m_pVideoSettings->GetHWAccelNumDevices(hwAccel);
   for (DWORD dwDevice = 0; dwDevice < dwnDevices; dwDevice++)
@@ -395,7 +403,13 @@ HRESULT CLAVVideoSettingsProp::UpdateHWOptions()
     }
   }
 
-  if (dwnDevices == 0) {
+  if (hwAccel == HWAccel_D3D11 && !IsWindows8OrNewer())
+  {
+    m_HWDeviceIndex = 0;
+    dwnDevices = 0;
+    SendDlgItemMessage(m_Dlg, IDC_LBL_HWACCEL_DEVICE_HINT, WM_SETTEXT, 0, (LPARAM)hwHintD3D11NotSupported);
+  }
+  else if (dwnDevices == 0) {
     m_HWDeviceIndex = 0;
     SendDlgItemMessage(m_Dlg, IDC_LBL_HWACCEL_DEVICE_HINT, WM_SETTEXT, 0, (LPARAM)hwHintNoDeviceChoice);
   }
@@ -406,8 +420,17 @@ HRESULT CLAVVideoSettingsProp::UpdateHWOptions()
       m_HWDeviceIndex = 0;
     else
       m_HWDeviceIndex++;
-    SendDlgItemMessage(m_Dlg, IDC_LBL_HWACCEL_DEVICE_HINT, WM_SETTEXT, 0, (LPARAM)(hwAccel == HWAccel_DXVA2CopyBack ? hwHintDXVA2Display : L""));
+
+    if (hwAccel == HWAccel_DXVA2CopyBack)
+      SendDlgItemMessage(m_Dlg, IDC_LBL_HWACCEL_DEVICE_HINT, WM_SETTEXT, 0, (LPARAM)hwHintDXVA2Display);
+    else if (hwAccel == HWAccel_D3D11)
+      SendDlgItemMessage(m_Dlg, IDC_LBL_HWACCEL_DEVICE_HINT, WM_SETTEXT, 0, (LPARAM)hwHintD3D11DeviceHint);
+    else
+      SendDlgItemMessage(m_Dlg, IDC_LBL_HWACCEL_DEVICE_HINT, WM_SETTEXT, 0, (LPARAM)L"");
   }
+
+  EnableWindow(GetDlgItem(m_Dlg, IDC_LBL_HWACCEL_DEVICE_SELECT), (dwnDevices > 0));
+  EnableWindow(GetDlgItem(m_Dlg, IDC_HWACCEL_DEVICE_SELECT), (dwnDevices > 0));
 
   SendDlgItemMessage(m_Dlg, IDC_HWACCEL_DEVICE_SELECT, CB_SETCURSEL, m_HWDeviceIndex, 0);
 
@@ -445,6 +468,7 @@ HRESULT CLAVVideoSettingsProp::LoadData()
   }
 
   m_HWRes = m_pVideoSettings->GetHWAccelResolutionFlags();
+  m_HWAccelCUVIDDXVA = m_pVideoSettings->GetHWAccelDeintHQ();
 
   m_HWDeintAlgo = m_pVideoSettings->GetHWAccelDeintMode();
   m_HWDeintOutMode = m_pVideoSettings->GetHWAccelDeintOutput();
@@ -629,9 +653,16 @@ INT_PTR CLAVVideoSettingsProp::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wPa
       if (bValue != m_HWAccelCodecs[HWCodec_VP9]) {
         SetDirty();
       }
-    } else if (HIWORD(wParam) == CBN_SELCHANGE && LOWORD(wParam) == IDC_HWACCEL_DEVICE_SELECT) {
+    }
+    else if (HIWORD(wParam) == CBN_SELCHANGE && LOWORD(wParam) == IDC_HWACCEL_DEVICE_SELECT) {
       lValue = SendDlgItemMessage(m_Dlg, LOWORD(wParam), CB_GETCURSEL, 0, 0);
       if (lValue != m_HWDeviceIndex) {
+        SetDirty();
+      }
+    }
+    else if (LOWORD(wParam) == IDC_HWACCEL_CUVID_DXVA && HIWORD(wParam) == BN_CLICKED) {
+      bValue = (BOOL)SendDlgItemMessage(m_Dlg, LOWORD(wParam), BM_GETCHECK, 0, 0);
+      if (bValue != m_HWAccelCUVIDDXVA) {
         SetDirty();
       }
     } else if (LOWORD(wParam) == IDC_HWDEINT_ENABLE && HIWORD(wParam) == BN_CLICKED) {

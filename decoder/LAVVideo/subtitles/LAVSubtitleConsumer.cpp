@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      Copyright (C) 2010-2017 Hendrik Leppkes
  *      http://www.1f0.de
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -182,6 +182,10 @@ STDMETHODIMP CLAVSubtitleConsumer::ProcessFrame(LAVFrame *pFrame)
 
       format = LAVPixFmt_NV12;
       bpp = 8;
+    } else if (pFrame->format == LAVPixFmt_D3D11) {
+      // TODO D3D11
+      SafeRelease(&m_SubtitleFrame);
+      return E_FAIL;
     } else {
       if (!(pFrame->flags & LAV_FRAME_FLAG_BUFFER_MODIFY)) {
         CopyLAVFrameInPlace(pFrame);
@@ -230,7 +234,7 @@ static struct {
   { LAVPixFmt_YUV444,   AV_PIX_FMT_YUVA444P },
   { LAVPixFmt_YUV444bX, AV_PIX_FMT_YUVA444P },
   { LAVPixFmt_NV12,     AV_PIX_FMT_YUVA420P },
-  { LAVPixFmt_P010,     AV_PIX_FMT_YUVA420P },
+  { LAVPixFmt_P016,     AV_PIX_FMT_YUVA420P },
   { LAVPixFmt_YUY2,     AV_PIX_FMT_YUVA422P },
   { LAVPixFmt_RGB24,    AV_PIX_FMT_BGRA     },
   { LAVPixFmt_RGB32,    AV_PIX_FMT_BGRA     },
@@ -288,7 +292,7 @@ STDMETHODIMP CLAVSubtitleConsumer::SelectBlendFunction()
   case LAVPixFmt_NV12:
     blend = &CLAVSubtitleConsumer::blend_yuv_c<uint8_t,1>;
     break;
-  case LAVPixFmt_P010:
+  case LAVPixFmt_P016:
     blend = &CLAVSubtitleConsumer::blend_yuv_c<uint16_t, 1>;
     break;
   case LAVPixFmt_YUV420:
@@ -331,8 +335,8 @@ STDMETHODIMP CLAVSubtitleConsumer::ProcessSubtitleBitmap(LAVPixelFormat pixFmt, 
     SelectBlendFunction();
   }
 
-  // P010 is handled like its 16 bpp to compensate for having the data in the high bits
-  if (pixFmt == LAVPixFmt_P010)
+  // P010/P016 is always handled like its 16 bpp to compensate for having the data in the high bits
+  if (pixFmt == LAVPixFmt_P016)
     bpp = 16;
 
   BYTE *subData[4] = { nullptr, nullptr, nullptr, nullptr };
